@@ -10,11 +10,11 @@ app = FastAPI()
 # =========================
 # ENV
 # =========================
-GHL_TOKEN = os.getenv("GHL_TOKEN")
+GHL_API_KEY = os.getenv("GHL_API_KEY")
 LOCATION_ID = os.getenv("LOCATION_ID")
 PIPELINE_ID = os.getenv("PIPELINE_ID")
-PIPELINE_STAGE_ID = os.getenv("STAGE_ID")  # stage real
-NETSUITE_OPP_CF_ID = os.getenv("NETSUITE_OPP_CF_ID")  # custom field ID en GHL
+PIPELINE_STAGE_ID = os.getenv("PIPELINE_STAGE_ID")
+NETSUITE_OPP_CF_ID = os.getenv("NETSUITE_OPP_CF_ID")
 
 GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
@@ -23,6 +23,7 @@ GHL_BASE_URL = "https://services.leadconnectorhq.com"
 # =========================
 def env_check():
     return {
+        "GHL_API_KEY": bool(GHL_API_KEY),
         "LOCATION_ID": LOCATION_ID,
         "PIPELINE_ID": PIPELINE_ID,
         "PIPELINE_STAGE_ID": PIPELINE_STAGE_ID,
@@ -53,7 +54,7 @@ async def webhook_opportunity(request: Request):
     # Validaciones mínimas
     # -------------------------
     required_envs = [
-        GHL_TOKEN,
+        GHL_API_KEY,
         LOCATION_ID,
         PIPELINE_ID,
         PIPELINE_STAGE_ID,
@@ -107,7 +108,7 @@ async def webhook_opportunity(request: Request):
         return {
             "status": "error",
             "ghl_status": response.status_code,
-            "ghl_response": response.json()
+            "ghl_response": response.text
         }
 
     return {
