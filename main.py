@@ -5,20 +5,15 @@ import os
 app = FastAPI()
 
 # ===============================
-# CONFIG (ENV VARS EN RENDER)
+# ENV VARS (Render)
 # ===============================
 GHL_API_KEY = os.getenv("GHL_API_KEY")
 LOCATION_ID = os.getenv("GHL_LOCATION_ID")
-
-# IDs obtenidos desde list_pipelines.py
 PIPELINE_ID = os.getenv("GHL_PIPELINE_ID")
 STAGE_ID = os.getenv("GHL_STAGE_ID")
 
 GHL_OPPORTUNITY_URL = "https://services.leadconnectorhq.com/opportunities/"
 
-# ===============================
-# WEBHOOK
-# ===============================
 @app.post("/webhook/opportunity")
 async def receive_opportunity(request: Request):
     payload = await request.json()
@@ -26,8 +21,13 @@ async def receive_opportunity(request: Request):
     print("🔥 Webhook recibido desde NetSuite")
     print(payload)
 
+    # 🔴 Guard rail mínimo
+    if not STAGE_ID:
+        print("❌ STAGE_ID no definido")
+        return {"status": "error", "message": "STAGE_ID missing"}
+
     # -----------------------------
-    # Payload para GHL
+    # Payload GHL
     # -----------------------------
     ghl_payload = {
         "contactId": payload.get("ghl_contact_id"),
@@ -42,17 +42,15 @@ async def receive_opportunity(request: Request):
     print(ghl_payload)
 
     # -----------------------------
-    # Request a GHL
+    # POST a GHL
     # -----------------------------
     response = requests.post(
         GHL_OPPORTUNITY_URL,
         headers={
             "Authorization": f"Bearer {GHL_API_KEY}",
             "Version": "2021-07-28",
-            "Content-Type": "application/json"
-        },
-        params={
-            "locationId": LOCATION_ID
+            "Content-Type": "application/json",
+            "Location-Id": LOCATION_ID   # 🔥 ACÁ ESTÁ EL FIX
         },
         json=ghl_payload,
         timeout=15
