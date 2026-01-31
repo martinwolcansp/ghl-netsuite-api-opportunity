@@ -1,73 +1,115 @@
-from fastapi import FastAPI, Request
-import requests
 import os
+import requests
+from fastapi import FastAPI, Request
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
-GHL_API_KEY = os.getenv("GHL_API_KEY")
-LOCATION_ID = os.getenv("GHL_LOCATION_ID")
-PIPELINE_ID = os.getenv("GHL_PIPELINE_ID")
-STAGE_ID = os.getenv("GHL_STAGE_ID")
+# =========================
+# ENV
+# =========================
+GHL_TOKEN = os.getenv("GHL_TOKEN")
+LOCATION_ID = os.getenv("LOCATION_ID")
+PIPELINE_ID = os.getenv("PIPELINE_ID")
+PIPELINE_STAGE_ID = os.getenv("STAGE_ID")  # stage real
+NETSUITE_OPP_CF_ID = os.getenv("NETSUITE_OPP_CF_ID")  # custom field ID en GHL
 
-GHL_OPPORTUNITY_URL = "https://services.leadconnectorhq.com/opportunities/"
+GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
+# =========================
+# UTILS
+# =========================
+def env_check():
+    return {
+        "LOCATION_ID": LOCATION_ID,
+        "PIPELINE_ID": PIPELINE_ID,
+        "PIPELINE_STAGE_ID": PIPELINE_STAGE_ID,
+        "NETSUITE_OPP_CF_ID": NETSUITE_OPP_CF_ID
+    }
+
+def ghl_headers():
+    return {
+        "Authorization": f"Bearer {GHL_TOKEN}",
+        "Content-Type": "application/json",
+        "Accept": "application/json"
+    }
+
+# =========================
+# WEBHOOK
+# =========================
 @app.post("/webhook/opportunity")
-async def receive_opportunity(request: Request):
-    payload = await request.json()
+async def webhook_opportunity(request: Request):
 
+    payload = await request.json()
     print("🔥 Webhook recibido desde NetSuite")
     print(payload)
 
-    print("🧪 ENV CHECK", {
-        "LOCATION_ID": LOCATION_ID,
-        "PIPELINE_ID": PIPELINE_ID,
-        "STAGE_ID": STAGE_ID
-    })
+    print("🧪 ENV CHECK", env_check())
 
-    # -----------------------------
-    # Payload GHL (🔥 incluye locationId)
-    # -----------------------------
+    # -------------------------
+    # Validaciones mínimas
+    # -------------------------
+    required_envs = [
+        GHL_TOKEN,
+        LOCATION_ID,
+        PIPELINE_ID,
+        PIPELINE_STAGE_ID,
+        NETSUITE_OPP_CF_ID
+    ]
+
+    if not all(required_envs):
+        print("❌ Variables de entorno incompletas")
+        return {"status": "error", "message": "ENV incompleto"}
+
+    ghl_contact_id = payload.get("ghl_contact_id")
+    netsuite_opportunity_id = payload.get("netsuite_opportunity_id")
+    netsuite_title = payload.get("netsuite_title")
+
+    if not ghl_contact_id:
+        print("❌ ghl_contact_id faltante")
+        return {"status": "error", "message": "ghl_contact_id requerido"}
+
+    # -------------------------
+    # Payload correcto GHL
+    # -------------------------
     ghl_payload = {
-        "locationId": LOCATION_ID,  # 🔥 ESTE ES EL FIX REAL
-        "contactId": payload.get("ghl_contact_id"),
-        "name": payload.get("netsuite_title"),
+        "locationId": LOCATION_ID,
         "pipelineId": PIPELINE_ID,
-        "stageId": STAGE_ID,
+        "pipelineStageId": PIPELINE_STAGE_ID,
+        "contactId": ghl_contact_id,
+        "name": netsuite_title or f"Opportunity {netsuite_opportunity_id}",
         "status": "open",
-        "externalId": str(payload.get("netsuite_opportunity_id"))
+        "customFields": [
+            {
+                "id": NETSUITE_OPP_CF_ID,
+                "field_value": str(netsuite_opportunity_id)
+            }
+        ]
     }
 
     print("🚀 Creando Opportunity en GHL")
     print(ghl_payload)
 
     response = requests.post(
-        GHL_OPPORTUNITY_URL,
-        headers={
-            "Authorization": f"Bearer {GHL_API_KEY}",
-            "Version": "2021-07-28",
-            "Content-Type": "application/json",
-            "Location-Id": LOCATION_ID
-        },
-        params={
-            "locationId": LOCATION_ID
-        },
+        f"{GHL_BASE_URL}/opportunities/",
+        headers=ghl_headers(),
         json=ghl_payload,
-        timeout=15
+        timeout=30
     )
 
     print("📨 Respuesta GHL:", response.status_code)
     print(response.text)
 
-    if response.status_code not in (200, 201):
+    if response.status_code >= 400:
         return {
             "status": "error",
             "ghl_status": response.status_code,
-            "ghl_response": response.text
+            "ghl_response": response.json()
         }
-
-    ghl_response = response.json()
 
     return {
         "status": "ok",
-        "ghl_opportunity_id": ghl_response.get("id")
+        "ghl_response": response.json()
     }
