@@ -24,7 +24,11 @@ async def receive_opportunity(request: Request):
         "STAGE_ID": STAGE_ID
     })
 
+    # -----------------------------
+    # Payload GHL (🔥 incluye locationId)
+    # -----------------------------
     ghl_payload = {
+        "locationId": LOCATION_ID,  # 🔥 ESTE ES EL FIX REAL
         "contactId": payload.get("ghl_contact_id"),
         "name": payload.get("netsuite_title"),
         "pipelineId": PIPELINE_ID,
@@ -42,10 +46,10 @@ async def receive_opportunity(request: Request):
             "Authorization": f"Bearer {GHL_API_KEY}",
             "Version": "2021-07-28",
             "Content-Type": "application/json",
-            "Location-Id": LOCATION_ID     # HEADER
+            "Location-Id": LOCATION_ID
         },
         params={
-            "locationId": LOCATION_ID     # QUERY PARAM (🔥 CLAVE)
+            "locationId": LOCATION_ID
         },
         json=ghl_payload,
         timeout=15
