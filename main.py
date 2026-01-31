@@ -4,11 +4,21 @@ import os
 
 app = FastAPI()
 
+# ===============================
+# CONFIG (ENV VARS EN RENDER)
+# ===============================
 GHL_API_KEY = os.getenv("GHL_API_KEY")
+LOCATION_ID = os.getenv("GHL_LOCATION_ID")
 
-PIPELINE_ID = "61MQv4xKuvTQesby42pC"
-STAGE_ID = "71989c58-aeee-4c5a-bfc6-02997375065b"
+# IDs obtenidos desde list_pipelines.py
+PIPELINE_ID = os.getenv("GHL_PIPELINE_ID")
+STAGE_ID = os.getenv("GHL_STAGE_ID")
 
+GHL_OPPORTUNITY_URL = "https://services.leadconnectorhq.com/opportunities/"
+
+# ===============================
+# WEBHOOK
+# ===============================
 @app.post("/webhook/opportunity")
 async def receive_opportunity(request: Request):
     payload = await request.json()
@@ -16,33 +26,51 @@ async def receive_opportunity(request: Request):
     print("🔥 Webhook recibido desde NetSuite")
     print(payload)
 
+    # -----------------------------
+    # Payload para GHL
+    # -----------------------------
     ghl_payload = {
         "contactId": payload.get("ghl_contact_id"),
         "name": payload.get("netsuite_title"),
         "pipelineId": PIPELINE_ID,
         "stageId": STAGE_ID,
-        "status": "open"
+        "status": "open",
+        "externalId": str(payload.get("netsuite_opportunity_id"))
     }
 
-    print("🚀 Enviando Opportunity a GHL")
+    print("🚀 Creando Opportunity en GHL")
     print(ghl_payload)
 
+    # -----------------------------
+    # Request a GHL
+    # -----------------------------
     response = requests.post(
-        "https://services.leadconnectorhq.com/opportunities/",
+        GHL_OPPORTUNITY_URL,
         headers={
             "Authorization": f"Bearer {GHL_API_KEY}",
-            "Content-Type": "application/json",
-            "Version": "2021-07-28"
+            "Version": "2021-07-28",
+            "Content-Type": "application/json"
+        },
+        params={
+            "locationId": LOCATION_ID
         },
         json=ghl_payload,
-        timeout=10
+        timeout=15
     )
 
     print("📨 Respuesta GHL:", response.status_code)
     print(response.text)
 
+    if response.status_code not in (200, 201):
+        return {
+            "status": "error",
+            "ghl_status": response.status_code,
+            "ghl_response": response.text
+        }
+
+    ghl_response = response.json()
+
     return {
         "status": "ok",
-        "ghl_response_status": response.status_code
+        "ghl_opportunity_id": ghl_response.get("id")
     }
-
