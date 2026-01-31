@@ -31,9 +31,10 @@ def env_check():
 
 def ghl_headers():
     return {
-        "Authorization": f"Bearer {GHL_TOKEN}",
+        "Authorization": f"Bearer {GHL_API_KEY}",
         "Content-Type": "application/json",
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "Version": "2021-07-28"
     }
 
 # =========================
