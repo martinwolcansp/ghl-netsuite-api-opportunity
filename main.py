@@ -118,7 +118,7 @@ async def webhook_opportunity(request: Request):
                 "field_value": titulo_oportunidad
             },
             {
-                "id": "unidad_comercial",
+                "id": "unidad_comercial_ns",
                 "field_value": unidad_comercial
             }
         ]
