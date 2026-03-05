@@ -14,12 +14,7 @@ GHL_API_KEY = os.getenv("GHL_API_KEY")
 LOCATION_ID = os.getenv("LOCATION_ID")
 PIPELINE_ID = os.getenv("PIPELINE_ID")
 PIPELINE_STAGE_ID = os.getenv("PIPELINE_STAGE_ID")
-NETSUITE_OPP_CF_ID = os.getenv("NETSUITE_OPP_CF_ID")  # Custom field para NS Opportunity ID
-
-# -------------------------
-# ID del custom field en GHL para titulo_oportunidad
-# -------------------------
-TITULO_OPPORTUNITY_CF_ID = "titulo_oportunidad"
+NETSUITE_OPP_CF_ID = os.getenv("NETSUITE_OPP_CF_ID")  # ID del campo donde se guarda el ID de NetSuite
 
 GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
@@ -48,7 +43,6 @@ def ghl_headers():
 # =========================
 @app.post("/webhook/opportunity")
 async def webhook_opportunity(request: Request):
-
     payload = await request.json()
     print("🔥 Webhook recibido desde NetSuite")
     print(payload)
@@ -72,8 +66,8 @@ async def webhook_opportunity(request: Request):
 
     ghl_contact_id = payload.get("ghl_contact_id")
     netsuite_opportunity_id = payload.get("netsuite_opportunity_id")
-    customer_name = payload.get("netsuite_customer_name")
-    netsuite_title = payload.get("netsuite_title")
+    customer_name = payload.get("netsuite_customer_name")  # <- nombre del cliente
+    titulo_oportunidad = payload.get("titulo_oportunidad")  # <- título de la oportunidad
 
     if not ghl_contact_id:
         print("❌ ghl_contact_id faltante")
@@ -95,12 +89,12 @@ async def webhook_opportunity(request: Request):
         "status": "open",
         "customFields": [
             {
-                "id": NETSUITE_OPP_CF_ID,
-                "field_value": str(netsuite_opportunity_id)  # ID de NS
+                "id": NETSUITE_OPP_CF_ID,  # campo ID de NetSuite
+                "field_value": str(netsuite_opportunity_id)
             },
             {
-                "id": TITULO_OPPORTUNITY_CF_ID,
-                "field_value": netsuite_title  # título de la oportunidad en NS
+                "id": "titulo_oportunidad",  # ID del campo custom "titulo_oportunidad" en GHL
+                "field_value": titulo_oportunidad
             }
         ]
     }
