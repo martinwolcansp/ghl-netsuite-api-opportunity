@@ -121,7 +121,7 @@ async def webhook_opportunity(request: Request):
             "customFields": [
                 {"id": NETSUITE_OPP_CF_ID, "field_value": str(netsuite_opportunity_id)},
                 {"id": "titulo_oportunidad", "field_value": titulo_oportunidad},
-                {"id": "unidad_comercial", "field_value": unidad_comercial}
+                {"id": "unidad_comercial_ns", "field_value": unidad_comercial}
             ]
         }
 
@@ -150,7 +150,7 @@ async def webhook_opportunity(request: Request):
             "customFields": [
                 {"id": NETSUITE_OPP_CF_ID, "field_value": str(netsuite_opportunity_id)},
                 {"id": "titulo_oportunidad", "field_value": titulo_oportunidad},
-                {"id": "unidad_comercial", "field_value": unidad_comercial}
+                {"id": "unidad_comercial_ns", "field_value": unidad_comercial}
             ]
         }
 
