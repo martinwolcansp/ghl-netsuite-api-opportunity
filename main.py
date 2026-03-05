@@ -14,7 +14,7 @@ GHL_API_KEY = os.getenv("GHL_API_KEY")
 LOCATION_ID = os.getenv("LOCATION_ID")
 PIPELINE_ID = os.getenv("PIPELINE_ID")
 PIPELINE_STAGE_ID = os.getenv("PIPELINE_STAGE_ID")
-NETSUITE_OPP_CF_ID = os.getenv("NETSUITE_OPP_CF_ID")  # campo donde se guarda el ID de NetSuite
+NETSUITE_OPP_CF_ID = os.getenv("NETSUITE_OPP_CF_ID")  # Campo ID de NetSuite en GHL
 
 GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
@@ -38,14 +38,13 @@ def ghl_headers():
         "Version": "2021-07-28"
     }
 
-# ------------------------
-# Unidad comercial mapping
-# ------------------------
-UNIDAD_MAP = {
-    "1": "Hogar Seguro",
-    "2": "Comercio Seguro",
-    "3": "Obra Segura"
-}
+def translate_unidad_comercial(unidad):
+    mapping = {
+        '1': 'Hogar Seguro',
+        '2': 'Comercio Seguro',
+        '3': 'Obra Segura'
+    }
+    return mapping.get(str(unidad), 'Sin Definir')
 
 # =========================
 # WEBHOOK
@@ -58,7 +57,16 @@ async def webhook_opportunity(request: Request):
 
     print("🧪 ENV CHECK", env_check())
 
-    required_envs = [GHL_API_KEY, LOCATION_ID, PIPELINE_ID, PIPELINE_STAGE_ID, NETSUITE_OPP_CF_ID]
+    # -------------------------
+    # Validaciones mínimas
+    # -------------------------
+    required_envs = [
+        GHL_API_KEY,
+        LOCATION_ID,
+        PIPELINE_ID,
+        PIPELINE_STAGE_ID,
+        NETSUITE_OPP_CF_ID
+    ]
     if not all(required_envs):
         print("❌ Variables de entorno incompletas")
         return {"status": "error", "message": "ENV incompleto"}
@@ -67,88 +75,104 @@ async def webhook_opportunity(request: Request):
     netsuite_opportunity_id = payload.get("netsuite_opportunity_id")
     customer_name = payload.get("netsuite_customer_name")
     titulo_oportunidad = payload.get("titulo_oportunidad")
-    unidad_comercial_val = payload.get("unidad_comercial")
-    unidad_comercial = UNIDAD_MAP.get(str(unidad_comercial_val), "Otro")
+    unidad_comercial = payload.get("unidad_comercial")
 
-    if not ghl_contact_id or not customer_name:
-        print("❌ Datos mínimos faltantes")
-        return {"status": "error", "message": "ghl_contact_id o customer_name requerido"}
+    if not ghl_contact_id:
+        return {"status": "error", "message": "ghl_contact_id requerido"}
 
-    print("🏷 Unidad comercial traducida:", unidad_comercial)
+    if not customer_name:
+        return {"status": "error", "message": "netsuite_customer_name requerido"}
 
-    # =========================
-    # Buscar oportunidades abiertas del contacto
-    # =========================
-    search_body = {
+    # -------------------------
+    # Traducir unidad comercial
+    # -------------------------
+    unidad_comercial_ghl = translate_unidad_comercial(unidad_comercial)
+    print(f"🏷 Unidad comercial traducida: {unidad_comercial_ghl}")
+
+    # -------------------------
+    # Buscar oportunidades abiertas
+    # -------------------------
+    search_payload = {
+        "locationId": LOCATION_ID,
+        "pipelineId": PIPELINE_ID,
         "filters": [
             {"field": "contactId", "operator": "equals", "value": ghl_contact_id},
             {"field": "status", "operator": "equals", "value": "open"}
-        ],
-        "location_id": LOCATION_ID,
-        "pipeline_id": PIPELINE_ID
+        ]
     }
 
     try:
         search_resp = requests.post(
             f"{GHL_BASE_URL}/opportunities/search",
             headers=ghl_headers(),
-            json=search_body,
+            json=search_payload,
             timeout=30
         )
+
         print("🔍 Search status:", search_resp.status_code)
-        search_data = search_resp.json()
-        print("🔍 Search response:", search_data)
+        print("🔍 Search response:", search_resp.text)
+
+        existing_opps = search_resp.json().get("opportunities", [])
 
     except Exception as e:
-        print("❌ Error al buscar oportunidades en GHL", str(e))
-        search_data = None
+        print("❌ Error al buscar oportunidades en GHL", e)
+        existing_opps = []
 
-    # =========================
-    # Determinar acción: crear o actualizar
-    # =========================
-    update_opportunity_id = None
-    if search_data and search_resp.status_code == 200 and search_data.get("opportunities"):
-        for opp in search_data["opportunities"]:
-            # Solo actualizar si el campo NetSuite ID está vacío
-            opp_custom_fields = {cf["id"]: cf["fieldValue"] for cf in opp.get("customFields", [])}
-            if not opp_custom_fields.get(NETSUITE_OPP_CF_ID):
-                update_opportunity_id = opp["id"]
-                print("✨ Oportunidad abierta encontrada para actualizar:", update_opportunity_id)
-                break
-
-    # Payload GHL
-    ghl_payload = {
-        "locationId": LOCATION_ID,
-        "pipelineId": PIPELINE_ID,
-        "pipelineStageId": PIPELINE_STAGE_ID,
-        "contactId": ghl_contact_id,
-        "name": customer_name,
-        "status": "open",
-        "customFields": [
-            {"id": NETSUITE_OPP_CF_ID, "field_value": str(netsuite_opportunity_id)},
-            {"id": "titulo_oportunidad", "field_value": titulo_oportunidad},
-            {"id": "unidad_comercial", "field_value": unidad_comercial}
-        ]
-    }
-
-    if update_opportunity_id:
-        print("🚀 Actualizando oportunidad existente en GHL")
-        resp = requests.put(
-            f"{GHL_BASE_URL}/opportunities/{update_opportunity_id}",
+    # -------------------------
+    # Crear o actualizar
+    # -------------------------
+    if existing_opps:
+        # Tomamos la primera oportunidad abierta
+        opp_id = existing_opps[0]["id"]
+        print(f"✨ Actualizando oportunidad existente {opp_id}")
+        ghl_payload = {
+            "pipelineId": PIPELINE_ID,
+            "pipelineStageId": PIPELINE_STAGE_ID,
+            "customFields": [
+                {"id": NETSUITE_OPP_CF_ID, "field_value": str(netsuite_opportunity_id)},
+                {"id": "titulo_oportunidad", "field_value": titulo_oportunidad},
+                {"id": "unidad_comercial", "field_value": unidad_comercial_ghl}
+            ]
+        }
+        response = requests.put(
+            f"{GHL_BASE_URL}/opportunities/{opp_id}",
             headers=ghl_headers(),
             json=ghl_payload,
             timeout=30
         )
     else:
         print("✨ Creando nueva oportunidad")
-        resp = requests.post(
+        ghl_payload = {
+            "locationId": LOCATION_ID,
+            "pipelineId": PIPELINE_ID,
+            "pipelineStageId": PIPELINE_STAGE_ID,
+            "contactId": ghl_contact_id,
+            "name": customer_name,
+            "status": "open",
+            "customFields": [
+                {"id": NETSUITE_OPP_CF_ID, "field_value": str(netsuite_opportunity_id)},
+                {"id": "titulo_oportunidad", "field_value": titulo_oportunidad},
+                {"id": "unidad_comercial", "field_value": unidad_comercial_ghl}
+            ]
+        }
+        response = requests.post(
             f"{GHL_BASE_URL}/opportunities/",
             headers=ghl_headers(),
             json=ghl_payload,
             timeout=30
         )
 
-    print("📨 Respuesta GHL:", resp.status_code)
-    print(resp.text)
+    print("🚀 Respuesta GHL:", response.status_code)
+    print(response.text)
 
-    return {"status": "ok", "ghl_response": resp.json() if resp.status_code < 400 else resp.text}
+    if response.status_code >= 400:
+        return {
+            "status": "error",
+            "ghl_status": response.status_code,
+            "ghl_response": response.text
+        }
+
+    return {
+        "status": "ok",
+        "ghl_response": response.json()
+    }
