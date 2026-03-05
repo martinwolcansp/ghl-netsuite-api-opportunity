@@ -14,9 +14,18 @@ GHL_API_KEY = os.getenv("GHL_API_KEY")
 LOCATION_ID = os.getenv("LOCATION_ID")
 PIPELINE_ID = os.getenv("PIPELINE_ID")
 PIPELINE_STAGE_ID = os.getenv("PIPELINE_STAGE_ID")
-NETSUITE_OPP_CF_ID = os.getenv("NETSUITE_OPP_CF_ID")  # ID del campo donde se guarda el ID de NetSuite
+NETSUITE_OPP_CF_ID = os.getenv("NETSUITE_OPP_CF_ID")
 
 GHL_BASE_URL = "https://services.leadconnectorhq.com"
+
+# =========================
+# MAP UNIDAD COMERCIAL
+# =========================
+UNIDAD_COMERCIAL_MAP = {
+    "1": "Hogar Seguro",
+    "2": "Comercio Seguro",
+    "3": "Obra Segura"
+}
 
 # =========================
 # UTILS
@@ -43,7 +52,9 @@ def ghl_headers():
 # =========================
 @app.post("/webhook/opportunity")
 async def webhook_opportunity(request: Request):
+
     payload = await request.json()
+
     print("🔥 Webhook recibido desde NetSuite")
     print(payload)
 
@@ -66,8 +77,18 @@ async def webhook_opportunity(request: Request):
 
     ghl_contact_id = payload.get("ghl_contact_id")
     netsuite_opportunity_id = payload.get("netsuite_opportunity_id")
-    customer_name = payload.get("netsuite_customer_name")  # <- nombre del cliente
-    titulo_oportunidad = payload.get("titulo_oportunidad")  # <- título de la oportunidad
+    customer_name = payload.get("netsuite_customer_name")
+    titulo_oportunidad = payload.get("titulo_oportunidad")
+    unidad_comercial_ns = payload.get("unidad_comercial")
+
+    # -------------------------
+    # Traducción unidad comercial
+    # -------------------------
+    unidad_comercial = None
+    if unidad_comercial_ns:
+        unidad_comercial = UNIDAD_COMERCIAL_MAP.get(str(unidad_comercial_ns))
+
+    print("🏷 Unidad comercial traducida:", unidad_comercial)
 
     if not ghl_contact_id:
         print("❌ ghl_contact_id faltante")
@@ -78,23 +99,27 @@ async def webhook_opportunity(request: Request):
         return {"status": "error", "message": "netsuite_customer_name requerido"}
 
     # -------------------------
-    # Payload correcto GHL
+    # Payload GHL
     # -------------------------
     ghl_payload = {
         "locationId": LOCATION_ID,
         "pipelineId": PIPELINE_ID,
         "pipelineStageId": PIPELINE_STAGE_ID,
         "contactId": ghl_contact_id,
-        "name": customer_name,  # nombre del cliente
+        "name": customer_name,
         "status": "open",
         "customFields": [
             {
-                "id": NETSUITE_OPP_CF_ID,  # campo ID de NetSuite
+                "id": NETSUITE_OPP_CF_ID,
                 "field_value": str(netsuite_opportunity_id)
             },
             {
-                "id": "titulo_oportunidad",  # ID del campo custom "titulo_oportunidad" en GHL
+                "id": "titulo_oportunidad",
                 "field_value": titulo_oportunidad
+            },
+            {
+                "id": "unidad_comercial",
+                "field_value": unidad_comercial
             }
         ]
     }
