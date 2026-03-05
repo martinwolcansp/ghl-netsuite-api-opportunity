@@ -67,11 +67,16 @@ async def webhook_opportunity(request: Request):
 
     ghl_contact_id = payload.get("ghl_contact_id")
     netsuite_opportunity_id = payload.get("netsuite_opportunity_id")
-    netsuite_title = payload.get("netsuite_title")
+    customer_name = payload.get("netsuite_customer_name")  # <- nombre del cliente
+    netsuite_title = payload.get("netsuite_title")  # título de la oportunidad en NS (opcional)
 
     if not ghl_contact_id:
         print("❌ ghl_contact_id faltante")
         return {"status": "error", "message": "ghl_contact_id requerido"}
+
+    if not customer_name:
+        print("❌ netsuite_customer_name faltante")
+        return {"status": "error", "message": "netsuite_customer_name requerido"}
 
     # -------------------------
     # Payload correcto GHL
@@ -81,12 +86,12 @@ async def webhook_opportunity(request: Request):
         "pipelineId": PIPELINE_ID,
         "pipelineStageId": PIPELINE_STAGE_ID,
         "contactId": ghl_contact_id,
-        "name": netsuite_title or f"Opportunity {netsuite_opportunity_id}",
+        "name": customer_name,  # <- nombre del cliente
         "status": "open",
         "customFields": [
             {
                 "id": NETSUITE_OPP_CF_ID,
-                "field_value": str(netsuite_opportunity_id)
+                "field_value": str(netsuite_opportunity_id)  # ID de NS
             }
         ]
     }
