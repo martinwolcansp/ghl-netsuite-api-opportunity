@@ -88,6 +88,9 @@ async def webhook_opportunity(request: Request):
         },
         timeout=30
     )
+    
+    print("🔍 Search status:", search_resp.status_code)
+    print("🔍 Search response:", search_resp.text)
 
     if search_resp.status_code >= 400:
         print("❌ Error al buscar oportunidades en GHL")
