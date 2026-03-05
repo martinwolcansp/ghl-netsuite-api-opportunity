@@ -14,7 +14,8 @@ GHL_API_KEY = os.getenv("GHL_API_KEY")
 LOCATION_ID = os.getenv("LOCATION_ID")
 PIPELINE_ID = os.getenv("PIPELINE_ID")
 PIPELINE_STAGE_ID = os.getenv("PIPELINE_STAGE_ID")
-NETSUITE_OPP_CF_ID = os.getenv("NETSUITE_OPP_CF_ID")
+NETSUITE_OPP_CF_ID = os.getenv("NETSUITE_OPP_CF_ID")  # Custom field en GHL para NS Opportunity ID
+TITULO_OPPORTUNITY_CF_ID = "tUshSe9uBgbbWpBxf1wG"    # Custom field en GHL para título de oportunidad (poner el ID real que tengas)
 
 GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
@@ -67,16 +68,12 @@ async def webhook_opportunity(request: Request):
 
     ghl_contact_id = payload.get("ghl_contact_id")
     netsuite_opportunity_id = payload.get("netsuite_opportunity_id")
-    customer_name = payload.get("netsuite_customer_name")  # <- nombre del cliente
-    netsuite_title = payload.get("netsuite_title")  # título de la oportunidad en NS (opcional)
+    titulo_oportunidad = payload.get("titulo_oportunidad")
+    cliente_nombre = payload.get("cliente_nombre")
 
     if not ghl_contact_id:
         print("❌ ghl_contact_id faltante")
         return {"status": "error", "message": "ghl_contact_id requerido"}
-
-    if not customer_name:
-        print("❌ netsuite_customer_name faltante")
-        return {"status": "error", "message": "netsuite_customer_name requerido"}
 
     # -------------------------
     # Payload correcto GHL
@@ -86,12 +83,16 @@ async def webhook_opportunity(request: Request):
         "pipelineId": PIPELINE_ID,
         "pipelineStageId": PIPELINE_STAGE_ID,
         "contactId": ghl_contact_id,
-        "name": customer_name,  # <- nombre del cliente
+        "name": cliente_nombre or f"Cliente {ghl_contact_id}",  # nombre del cliente en el campo name
         "status": "open",
         "customFields": [
             {
                 "id": NETSUITE_OPP_CF_ID,
-                "field_value": str(netsuite_opportunity_id)  # ID de NS
+                "field_value": str(netsuite_opportunity_id)
+            },
+            {
+                "id": TITULO_OPPORTUNITY_CF_ID,
+                "field_value": titulo_oportunidad
             }
         ]
     }
