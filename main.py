@@ -116,6 +116,7 @@ async def webhook_opportunity(request: Request):
         print(f"✨ Actualizando oportunidad existente: {opp_id}")
 
         ghl_payload = {
+            "name": customer_name,
             "pipelineId": PIPELINE_ID,
             "pipelineStageId": PIPELINE_STAGE_ID,
             "customFields": [
