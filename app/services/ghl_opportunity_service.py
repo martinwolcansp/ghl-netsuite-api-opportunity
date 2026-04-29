@@ -16,7 +16,12 @@ from app.core.config import (
 logger = logging.getLogger("ghl_opportunity_service")
 
 
+# =========================
+# FIND BY NETSUITE ID
+# =========================
 def find_opportunity_by_ns_id(contact_id, netsuite_opportunity_id):
+
+    logger.info("🔍 Searching opportunity in GHL...")
 
     resp = search_opportunities(GHL_LOCATION_ID, contact_id)
 
@@ -39,6 +44,9 @@ def find_opportunity_by_ns_id(contact_id, netsuite_opportunity_id):
     return None
 
 
+# =========================
+# UPSERT OPPORTUNITY
+# =========================
 def upsert_opportunity(
     contact_id,
     netsuite_opportunity_id,
@@ -46,20 +54,29 @@ def upsert_opportunity(
     update_payload_builder
 ):
 
-    logger.info("===== UPSERT OPPORTUNITY =====")
+    logger.info("===== OPPORTUNITY UPSERT =====")
+    logger.info(f"Contact ID: {contact_id}")
+    logger.info(f"NS Opportunity ID: {netsuite_opportunity_id}")
 
     existing = find_opportunity_by_ns_id(
         contact_id,
         netsuite_opportunity_id
     )
 
+    # =========================
+    # FOUND → UPDATE
+    # =========================
     if existing:
         ghl_id = existing["id"]
-        logger.info(f"Updating opportunity: {ghl_id}")
+
+        logger.info(f"✅ Opportunity found: {ghl_id}")
+        logger.info("✏️ Updating opportunity...")
 
         payload = update_payload_builder(existing)
 
         resp = update_opportunity(ghl_id, payload)
+
+        logger.info(f"Update response: {resp.status_code}")
 
         return {
             "action": "updated",
@@ -67,12 +84,17 @@ def upsert_opportunity(
             "status": resp.status_code
         }
 
-    else:
-        logger.info("Creating opportunity")
+    # =========================
+    # NOT FOUND → CREATE
+    # =========================
+    logger.warning("❌ No opportunity found for NS ID")
+    logger.info("🆕 Creating new opportunity...")
 
-        resp = create_opportunity(create_payload)
+    resp = create_opportunity(create_payload)
 
-        return {
-            "action": "created",
-            "status": resp.status_code
-        }
+    logger.info(f"Create response: {resp.status_code}")
+
+    return {
+        "action": "created",
+        "status": resp.status_code
+    }
