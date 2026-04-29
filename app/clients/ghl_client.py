@@ -1,46 +1,57 @@
 # app/clients/ghl_client.py
 
 import requests
-from app.core.config import GHL_API_KEY
+import logging
+from app.core.config import GHL_API_KEY, GHL_LOCATION_ID
+
+logger = logging.getLogger("ghl_client")
 
 GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
 
-def ghl_headers():
-    return {
-        "Authorization": f"Bearer {GHL_API_KEY}",
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Version": "2021-07-28"
-    }
-
-
-def search_opportunities(location_id, contact_id):
-    return requests.get(
-        f"{GHL_BASE_URL}/opportunities/search",
-        headers=ghl_headers(),
-        params={
-            "location_id": location_id,
-            "contact_id": contact_id,
-            "limit": 100
-        },
-        timeout=30
-    )
-
-
+# ===============================
+# CREATE OPPORTUNITY
+# ===============================
 def create_opportunity(payload):
-    return requests.post(
+
+    logger.info("========== GHL CREATE REQUEST ==========")
+    logger.info(payload)
+
+    resp = requests.post(
         f"{GHL_BASE_URL}/opportunities/",
-        headers=ghl_headers(),
-        json=payload,
-        timeout=30
+        headers={
+            "Authorization": f"Bearer {GHL_API_KEY}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Version": "2021-07-28"
+        },
+        json=payload
     )
 
+    return resp
 
+
+# ===============================
+# UPDATE OPPORTUNITY (UNIFICADO)
+# ===============================
 def update_opportunity(opportunity_id, payload):
-    return requests.put(
+
+    logger.info("========== GHL UPDATE REQUEST ==========")
+    logger.info(f"Opportunity ID: {opportunity_id}")
+    logger.info(f"Payload: {payload}")
+
+    resp = requests.put(
         f"{GHL_BASE_URL}/opportunities/{opportunity_id}",
-        headers=ghl_headers(),
-        json=payload,
-        timeout=30
+        headers={
+            "Authorization": f"Bearer {GHL_API_KEY}",
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Version": "2021-07-28"
+        },
+        json=payload
     )
+
+    logger.info(f"GHL RESPONSE STATUS: {resp.status_code}")
+    logger.info(f"GHL RESPONSE BODY: {resp.text}")
+
+    return resp
