@@ -16,13 +16,14 @@ GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
 
 # ===============================
-# SEARCH OPPORTUNITY (POR CONTACTO + MATCH NS ID)
+# SEARCH OPPORTUNITY BY NS CUSTOM FIELD
 # ===============================
 def find_opportunity(contact_id, opportunity_id):
 
     logger.info("========== GHL OPPORTUNITY SEARCH ==========")
     logger.info(f"Contact ID: {contact_id}")
-    logger.info(f"NS Opportunity ID: {opportunity_id}")
+    logger.info(f"NS Opportunity ID (target): {opportunity_id}")
+    logger.info(f"CF ID used: {CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID}")
 
     resp = requests.get(
         f"{GHL_BASE_URL}/opportunities/search",
@@ -43,7 +44,7 @@ def find_opportunity(contact_id, opportunity_id):
 
     opportunities = resp.json().get("opportunities", [])
 
-    logger.info(f"📦 Opportunities found: {len(opportunities)}")
+    logger.info(f"📦 Opportunities found (contact search): {len(opportunities)}")
 
     for opp in opportunities:
 
@@ -51,17 +52,30 @@ def find_opportunity(contact_id, opportunity_id):
         logger.info(f"Checking Opportunity ID: {opp.get('id')}")
         logger.info(f"Name: {opp.get('name')}")
 
-        for cf in opp.get("customFields", []):
-            value = cf.get("fieldValue") or cf.get("fieldValueString")
+        custom_fields = opp.get("customFields", [])
+
+        for cf in custom_fields:
+
+            cf_id = cf.get("id")
+
+            # soporta múltiples formatos de GHL
+            value = (
+                cf.get("fieldValue")
+                or cf.get("fieldValueString")
+                or cf.get("value")
+                or cf.get("field_value")
+            )
+
+            logger.info(f"CF {cf_id} = {value}")
 
             if (
-                cf.get("id") == CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID
+                cf_id == CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID
                 and str(value) == str(opportunity_id)
             ):
-                logger.info("🎯 MATCH FOUND")
+                logger.info("🎯 MATCH FOUND BY NS ID")
                 return opp
 
-    logger.warning("❌ No matching opportunity found")
+    logger.warning("❌ No matching opportunity found in contact scope")
     return None
 
 
@@ -76,7 +90,6 @@ def sync_opportunity(
     update_payload_builder=None
 ):
 
-    # compatibilidad naming
     if opportunity_id is None:
         opportunity_id = netsuite_opportunity_id
 
@@ -89,10 +102,10 @@ def sync_opportunity(
     matching = find_opportunity(contact_id, opportunity_id)
 
     # ===============================
-    # CREATE (NO EXISTE)
+    # CREATE
     # ===============================
     if not matching:
-        logger.warning("⚠️ Opportunity not found → creating")
+        logger.warning("⚠️ No existing opportunity → CREATE")
 
         resp = create_opportunity(create_payload)
 
@@ -106,7 +119,7 @@ def sync_opportunity(
         }
 
     # ===============================
-    # UPDATE (EXISTE)
+    # UPDATE
     # ===============================
     ghl_id = matching["id"]
 
@@ -115,23 +128,24 @@ def sync_opportunity(
 
     payload = update_payload_builder(matching) if update_payload_builder else {}
 
-    # ===============================
-    # IDEMPOTENCY CHECK (BÁSICO)
-    # ===============================
     current_stage = matching.get("pipelineStageId")
     new_stage = payload.get("pipelineStageId")
 
-    if current_stage == new_stage:
-        logger.info("⏭ No changes detected (same stage)")
+    current_status = matching.get("status")
+    new_status = payload.get("status")
+
+    if current_stage == new_stage and current_status == new_status:
+        logger.info("⏭ IDENTITY MATCH → NO UPDATE REQUIRED")
         return {"status": "already_updated"}
 
     logger.info("========== FINAL UPDATE ==========")
-    logger.info(f"Updating Opportunity ID: {ghl_id}")
+    logger.info(f"Stage: {current_stage} → {new_stage}")
+    logger.info(f"Status: {current_status} → {new_status}")
 
     resp = update_opportunity(
         opportunity_id=ghl_id,
         pipeline_stage_id=new_stage,
-        status=payload.get("status"),
+        status=new_status,
         custom_fields=payload.get("customFields", [])
     )
 

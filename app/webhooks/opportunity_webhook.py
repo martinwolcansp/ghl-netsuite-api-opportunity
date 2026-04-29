@@ -1,6 +1,6 @@
 # app/webhooks/opportunity_webhook.py
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 
 from app.services.ghl_opportunity_service import sync_opportunity
 from app.services.opportunity_mapper import (
@@ -24,12 +24,29 @@ async def opportunity_webhook(request: Request):
 
     payload = await request.json()
 
+    # ===============================
+    # EXTRACT DATA
+    # ===============================
     contact_id = payload.get("ghl_contact_id")
     ns_id = payload.get("netsuite_opportunity_id")
     customer_name = payload.get("netsuite_customer_name")
     titulo = payload.get("titulo_oportunidad")
-
     unidad = map_unidad_comercial(payload.get("unidad_comercial"))
+
+    # ===============================
+    # VALIDATION (CRÍTICO)
+    # ===============================
+    if not contact_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing ghl_contact_id"
+        )
+
+    if not ns_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Missing netsuite_opportunity_id"
+        )
 
     # ===============================
     # CREATE PAYLOAD
@@ -47,11 +64,11 @@ async def opportunity_webhook(request: Request):
     )
 
     # ===============================
-    # UPSERT (SIN status / monto)
+    # UPSERT OPERATION
     # ===============================
     return sync_opportunity(
         contact_id=contact_id,
-        netsuite_opportunity_id=ns_id,
+        opportunity_id=ns_id,  # 👈 normalizado (IMPORTANTE)
         create_payload=create_payload,
         update_payload_builder=lambda existing: build_update_payload(
             existing,
