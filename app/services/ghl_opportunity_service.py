@@ -16,7 +16,7 @@ GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
 
 # ===============================
-# SEARCH OPPORTUNITY (MODEL PRESUPUESTO)
+# SEARCH OPPORTUNITY (CON FALLBACK)
 # ===============================
 def find_opportunity(contact_id, opportunity_id):
 
@@ -24,6 +24,9 @@ def find_opportunity(contact_id, opportunity_id):
     logger.info(f"Contact ID: {contact_id}")
     logger.info(f"NS Opportunity ID: {opportunity_id}")
 
+    # ===============================
+    # 1️⃣ SEARCH POR CONTACTO
+    # ===============================
     resp = requests.get(
         f"{GHL_BASE_URL}/opportunities/search",
         headers={
@@ -43,8 +46,37 @@ def find_opportunity(contact_id, opportunity_id):
 
     opportunities = resp.json().get("opportunities", [])
 
-    logger.info(f"📦 Opportunities found: {len(opportunities)}")
+    logger.info(f"📦 Opportunities found (contact search): {len(opportunities)}")
 
+    # ===============================
+    # 2️⃣ FALLBACK GLOBAL SEARCH
+    # ===============================
+    if not opportunities:
+        logger.warning("⚠️ No opportunities by contact_id → fallback search")
+
+        resp = requests.get(
+            f"{GHL_BASE_URL}/opportunities/search",
+            headers={
+                "Authorization": f"Bearer {GHL_API_KEY}",
+                "Accept": "application/json",
+                "Version": "2021-07-28"
+            },
+            params={
+                "location_id": GHL_LOCATION_ID
+            }
+        )
+
+        if resp.status_code not in (200, 201):
+            logger.error(f"GHL fallback search error: {resp.text}")
+            return None
+
+        opportunities = resp.json().get("opportunities", [])
+
+        logger.info(f"📦 Opportunities found (fallback): {len(opportunities)}")
+
+    # ===============================
+    # 3️⃣ MATCH POR CUSTOM FIELD
+    # ===============================
     for opp in opportunities:
 
         logger.info("--------------------------------------")
@@ -73,12 +105,17 @@ def find_opportunity(contact_id, opportunity_id):
 # ===============================
 def sync_opportunity(
     contact_id,
-    opportunity_id,
-    monto,
-    status,
-    stage_id,
-    update_payload_builder
+    opportunity_id=None,
+    netsuite_opportunity_id=None,
+    monto=None,
+    status=None,
+    stage_id=None,
+    update_payload_builder=None
 ):
+
+    # compatibilidad naming
+    if opportunity_id is None:
+        opportunity_id = netsuite_opportunity_id
 
     logger.info("========== OPPORTUNITY SYNC NS → GHL ==========")
     logger.info(f"NS Opportunity ID: {opportunity_id}")
@@ -122,7 +159,7 @@ def sync_opportunity(
     logger.info("========== FINAL UPDATE ==========")
     logger.info(f"Updating Opportunity ID: {ghl_id}")
 
-    payload = update_payload_builder(matching)
+    payload = update_payload_builder(matching) if update_payload_builder else {}
 
     resp = update_opportunity(
         opportunity_id=ghl_id,
@@ -143,6 +180,6 @@ def sync_opportunity(
 
 
 # ===============================
-# BACKWARD COMPATIBILITY FIX (IMPORT ERROR SOLVED)
+# BACKWARD COMPATIBILITY
 # ===============================
 upsert_opportunity = sync_opportunity
