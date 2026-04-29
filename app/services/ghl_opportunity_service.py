@@ -16,7 +16,7 @@ GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
 
 # ===============================
-# SEARCH OPPORTUNITY (ESTILO PRESUPUESTO)
+# SEARCH OPPORTUNITY (MODEL PRESUPUESTO)
 # ===============================
 def find_opportunity(contact_id, opportunity_id):
 
@@ -45,19 +45,13 @@ def find_opportunity(contact_id, opportunity_id):
 
     logger.info(f"📦 Opportunities found: {len(opportunities)}")
 
-    matching = None
-
     for opp in opportunities:
 
         logger.info("--------------------------------------")
         logger.info(f"Checking Opportunity ID: {opp.get('id')}")
         logger.info(f"Name: {opp.get('name')}")
 
-        custom_fields = opp.get("customFields", [])
-
-        logger.info(f"🧩 Custom fields: {len(custom_fields)}")
-
-        for cf in custom_fields:
+        for cf in opp.get("customFields", []):
 
             value = cf.get("fieldValue") or cf.get("fieldValueString")
 
@@ -67,23 +61,15 @@ def find_opportunity(contact_id, opportunity_id):
                 cf.get("id") == CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID
                 and str(value) == str(opportunity_id)
             ):
-                matching = opp
-                logger.info("🎯 MATCH FOUND IN CUSTOM FIELD")
-                break
+                logger.info("🎯 MATCH FOUND")
+                return opp
 
-        if matching:
-            break
-
-    if not matching:
-        logger.warning("❌ Opportunity not found in GHL")
-        return None
-
-    logger.info(f"✅ MATCH SELECTED: {matching.get('id')}")
-    return matching
+    logger.warning("❌ No matching opportunity found")
+    return None
 
 
 # ===============================
-# SYNC (MODEL PRESUPUESTO)
+# SYNC CORE LOGIC
 # ===============================
 def sync_opportunity(
     contact_id,
@@ -103,13 +89,13 @@ def sync_opportunity(
     matching = find_opportunity(contact_id, opportunity_id)
 
     if not matching:
-        logger.warning("❌ No matching opportunity found")
+        logger.warning("❌ Opportunity not found")
         return {"error": "not_found"}
 
     ghl_id = matching["id"]
 
     # ===============================
-    # IDEMPOTENCY CHECK (ESTILO PRESUPUESTO)
+    # IDEMPOTENCY CHECK
     # ===============================
     current_stage = matching.get("pipelineStageId")
     current_status = matching.get("status")
@@ -135,9 +121,6 @@ def sync_opportunity(
     # ===============================
     logger.info("========== FINAL UPDATE ==========")
     logger.info(f"Updating Opportunity ID: {ghl_id}")
-    logger.info(f"→ stage={stage_id}")
-    logger.info(f"→ status={status}")
-    logger.info(f"→ value={monto}")
 
     payload = update_payload_builder(matching)
 
@@ -157,3 +140,9 @@ def sync_opportunity(
         "id": ghl_id,
         "status": resp.status_code
     }
+
+
+# ===============================
+# BACKWARD COMPATIBILITY FIX (IMPORT ERROR SOLVED)
+# ===============================
+upsert_opportunity = sync_opportunity
