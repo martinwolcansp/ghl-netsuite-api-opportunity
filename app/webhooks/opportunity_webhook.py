@@ -64,7 +64,6 @@ async def opportunity_webhook(request: Request):
     return sync_opportunity(
         contact_id=contact_id,
         opportunity_id=opportunity_id,  # 👈 FIX CRÍTICO (ANTES ERA ns_id mismatch)
-        monto=None,  # si no aplica en oportunidad, queda opcional en service
         status=None,
         stage_id=PIPELINE_STAGE_ID,
         update_payload_builder=lambda existing: build_update_payload(
