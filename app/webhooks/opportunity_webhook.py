@@ -24,24 +24,12 @@ async def opportunity_webhook(request: Request):
 
     payload = await request.json()
 
-    # ===============================
-    # EXTRACT PAYLOAD
-    # ===============================
     contact_id = payload.get("ghl_contact_id")
-    opportunity_id = payload.get("netsuite_opportunity_id")
+    ns_id = payload.get("netsuite_opportunity_id")
     customer_name = payload.get("netsuite_customer_name")
     titulo = payload.get("titulo_oportunidad")
 
     unidad = map_unidad_comercial(payload.get("unidad_comercial"))
-
-    # ===============================
-    # BASIC VALIDATION (EVITA 500 SILENCIOSOS)
-    # ===============================
-    if not contact_id or not opportunity_id:
-        return {
-            "status": "error",
-            "message": "missing contact_id or netsuite_opportunity_id"
-        }
 
     # ===============================
     # CREATE PAYLOAD
@@ -52,20 +40,19 @@ async def opportunity_webhook(request: Request):
         pipeline_stage_id=PIPELINE_STAGE_ID,
         contact_id=contact_id,
         customer_name=customer_name,
-        netsuite_opportunity_id=opportunity_id,
+        netsuite_opportunity_id=ns_id,
         titulo_oportunidad=titulo,
         unidad_comercial=unidad,
         custom_field_ns_id=CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID
     )
 
     # ===============================
-    # UPSERT CALL (FIXED)
+    # UPSERT (SIN status / monto)
     # ===============================
     return sync_opportunity(
         contact_id=contact_id,
-        opportunity_id=opportunity_id,  # 👈 FIX CRÍTICO (ANTES ERA ns_id mismatch)
-        status=None,
-        stage_id=PIPELINE_STAGE_ID,
+        netsuite_opportunity_id=ns_id,
+        create_payload=create_payload,
         update_payload_builder=lambda existing: build_update_payload(
             existing,
             customer_name,
