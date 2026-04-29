@@ -1,178 +1,159 @@
 # app/services/ghl_opportunity_service.py
 
 import logging
+import requests
 
-from app.clients.ghl_client import search_opportunities
+from app.clients.ghl_client import update_opportunity
 from app.core.config import (
+    GHL_API_KEY,
     GHL_LOCATION_ID,
     CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID
 )
 
-logger = logging.getLogger("ghl_opportunity_service")
+logger = logging.getLogger("ghl_service")
+
+GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
 
 # ===============================
-# FIND BY NETSUITE OPPORTUNITY ID (DEBUG VERSION)
+# SEARCH OPPORTUNITY (ESTILO PRESUPUESTO)
 # ===============================
-def find_opportunity_by_ns_id(contact_id, netsuite_opportunity_id):
+def find_opportunity(contact_id, opportunity_id):
 
-    logger.info("======================================")
-    logger.info("🔍 OPPORTUNITY SEARCH (NETSUITE MATCH)")
-    logger.info("======================================")
+    logger.info("========== GHL OPPORTUNITY SEARCH ==========")
     logger.info(f"Contact ID: {contact_id}")
-    logger.info(f"NS Opportunity ID (input): {netsuite_opportunity_id}")
+    logger.info(f"NS Opportunity ID: {opportunity_id}")
 
-    resp = search_opportunities(GHL_LOCATION_ID, contact_id)
-
-    logger.info(f"📡 GHL response status: {resp.status_code}")
+    resp = requests.get(
+        f"{GHL_BASE_URL}/opportunities/search",
+        headers={
+            "Authorization": f"Bearer {GHL_API_KEY}",
+            "Accept": "application/json",
+            "Version": "2021-07-28"
+        },
+        params={
+            "location_id": GHL_LOCATION_ID,
+            "contact_id": contact_id
+        }
+    )
 
     if resp.status_code not in (200, 201):
-        logger.error(f"❌ GHL API ERROR: {resp.text}")
+        logger.error(f"GHL search error: {resp.text}")
         return None
 
-    data = resp.json()
-    opportunities = data.get("opportunities", [])
+    opportunities = resp.json().get("opportunities", [])
 
-    logger.info(f"📦 Opportunities returned: {len(opportunities)}")
+    logger.info(f"📦 Opportunities found: {len(opportunities)}")
 
-    if not opportunities:
-        logger.warning("⚠️ No opportunities found for contact")
-        return None
+    matching = None
 
-    # ===============================
-    # LOOP THROUGH OPPORTUNITIES
-    # ===============================
-    for i, opp in enumerate(opportunities):
-
-        opp_id = opp.get("id")
-        opp_name = opp.get("name")
+    for opp in opportunities:
 
         logger.info("--------------------------------------")
-        logger.info(f"📌 Opportunity #{i}")
-        logger.info(f"ID: {opp_id}")
-        logger.info(f"Name: {opp_name}")
+        logger.info(f"Checking Opportunity ID: {opp.get('id')}")
+        logger.info(f"Name: {opp.get('name')}")
 
         custom_fields = opp.get("customFields", [])
 
-        logger.info(f"🧩 Custom fields count: {len(custom_fields)}")
+        logger.info(f"🧩 Custom fields: {len(custom_fields)}")
 
-        if not custom_fields:
-            logger.warning("⚠️ No custom fields in this opportunity")
-            continue
-
-        matched_value = None
-
-        # ===============================
-        # LOOP CUSTOM FIELDS
-        # ===============================
         for cf in custom_fields:
 
-            cf_id = cf.get("id")
+            value = cf.get("fieldValue") or cf.get("fieldValueString")
 
-            value = (
-                cf.get("fieldValue")
-                or cf.get("fieldValueString")
-                or cf.get("value")
-            )
+            logger.info(f"CF {cf.get('id')} = {value}")
 
-            logger.info(f"   - CF ID: {cf_id} | VALUE: {value}")
+            if (
+                cf.get("id") == CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID
+                and str(value) == str(opportunity_id)
+            ):
+                matching = opp
+                logger.info("🎯 MATCH FOUND IN CUSTOM FIELD")
+                break
 
-            if cf_id == CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID:
-                matched_value = value
-                logger.info(f"🎯 MATCHED CUSTOM FIELD → value: {value}")
+        if matching:
+            break
 
-        # ===============================
-        # FINAL COMPARISON
-        # ===============================
-        if matched_value is not None:
+    if not matching:
+        logger.warning("❌ Opportunity not found in GHL")
+        return None
 
-            logger.info(f"🔎 Comparing:")
-            logger.info(f"   - GHL value: {matched_value}")
-            logger.info(f"   - NS value : {netsuite_opportunity_id}")
-
-            if str(matched_value).strip() == str(netsuite_opportunity_id).strip():
-
-                logger.info("✅ MATCH FOUND!")
-                logger.info(f"👉 Returning opportunity ID: {opp_id}")
-
-                return opp
-
-            else:
-                logger.info("❌ Value mismatch (same field, different value)")
-
-        else:
-            logger.info("❌ Custom field not found in this opportunity")
-
-    logger.warning("🚨 NO MATCH FOUND FOR NETSUITE OPPORTUNITY ID")
-    return None
+    logger.info(f"✅ MATCH SELECTED: {matching.get('id')}")
+    return matching
 
 
 # ===============================
-# UPSERT OPPORTUNITY (LOGGED)
+# SYNC (MODEL PRESUPUESTO)
 # ===============================
-def upsert_opportunity(
+def sync_opportunity(
     contact_id,
-    netsuite_opportunity_id,
-    create_payload,
+    opportunity_id,
+    monto,
+    status,
+    stage_id,
     update_payload_builder
 ):
 
-    logger.info("======================================")
-    logger.info("🚀 OPPORTUNITY UPSERT START")
-    logger.info("======================================")
+    logger.info("========== OPPORTUNITY SYNC NS → GHL ==========")
+    logger.info(f"NS Opportunity ID: {opportunity_id}")
+    logger.info(f"Monto: {monto}")
+    logger.info(f"Status: {status}")
+    logger.info(f"Stage ID: {stage_id}")
 
-    logger.info(f"Contact ID: {contact_id}")
-    logger.info(f"NS Opportunity ID: {netsuite_opportunity_id}")
+    matching = find_opportunity(contact_id, opportunity_id)
 
-    existing = find_opportunity_by_ns_id(
-        contact_id,
-        netsuite_opportunity_id
+    if not matching:
+        logger.warning("❌ No matching opportunity found")
+        return {"error": "not_found"}
+
+    ghl_id = matching["id"]
+
+    # ===============================
+    # IDEMPOTENCY CHECK (ESTILO PRESUPUESTO)
+    # ===============================
+    current_stage = matching.get("pipelineStageId")
+    current_status = matching.get("status")
+    current_value = matching.get("monetaryValue")
+
+    logger.info("========== IDEMPOTENCY CHECK ==========")
+    logger.info(f"Current stage: {current_stage}")
+    logger.info(f"Current status: {current_status}")
+    logger.info(f"Current value: {current_value}")
+
+    already = (
+        str(current_value) == str(monto)
+        and current_stage == stage_id
+        and current_status == status
     )
 
-    # ===============================
-    # UPDATE PATH
-    # ===============================
-    if existing:
-
-        ghl_id = existing["id"]
-
-        logger.info("======================================")
-        logger.info("✏️ UPDATE PATH TRIGGERED")
-        logger.info("======================================")
-        logger.info(f"Existing GHL ID: {ghl_id}")
-
-        payload = update_payload_builder(existing)
-
-        logger.info("📤 Sending UPDATE request to GHL...")
-
-        from app.clients.ghl_client import update_opportunity
-        resp = update_opportunity(ghl_id, payload)
-
-        logger.info(f"📡 Update response status: {resp.status_code}")
-        logger.info(f"📡 Response body: {resp.text}")
-
-        return {
-            "action": "updated",
-            "id": ghl_id,
-            "status": resp.status_code
-        }
+    if already:
+        logger.info("⏭ No changes detected (idempotent)")
+        return {"status": "already_updated"}
 
     # ===============================
-    # CREATE PATH
+    # UPDATE
     # ===============================
-    logger.info("======================================")
-    logger.info("🆕 CREATE PATH TRIGGERED")
-    logger.info("======================================")
+    logger.info("========== FINAL UPDATE ==========")
+    logger.info(f"Updating Opportunity ID: {ghl_id}")
+    logger.info(f"→ stage={stage_id}")
+    logger.info(f"→ status={status}")
+    logger.info(f"→ value={monto}")
 
-    logger.warning("No matching opportunity found → creating new one")
+    payload = update_payload_builder(matching)
 
-    from app.clients.ghl_client import create_opportunity
-    resp = create_opportunity(create_payload)
+    resp = update_opportunity(
+        opportunity_id=ghl_id,
+        monetary_value=monto,
+        status=status,
+        pipeline_stage_id=stage_id,
+        custom_fields=payload.get("customFields", [])
+    )
 
-    logger.info(f"📡 Create response status: {resp.status_code}")
-    logger.info(f"📡 Response body: {resp.text}")
+    logger.info(f"GHL RESPONSE STATUS: {resp.status_code}")
+    logger.info(f"GHL RESPONSE BODY: {resp.text}")
 
     return {
-        "action": "created",
+        "action": "updated",
+        "id": ghl_id,
         "status": resp.status_code
     }
