@@ -1,4 +1,5 @@
-#services/ghl_client.py
+# app/clients/ghl_client.py
+
 import requests
 from app.core.config import GHL_API_KEY
 

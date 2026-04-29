@@ -1,4 +1,5 @@
-#webhooksopportunity_webhook.py
+# app/webhooks/opportunity_webhook.py
+
 from fastapi import APIRouter, Request
 
 from app.services.ghl_opportunity_service import upsert_opportunity
@@ -30,9 +31,6 @@ async def opportunity_webhook(request: Request):
 
     unidad = map_unidad_comercial(payload.get("unidad_comercial"))
 
-    # =========================
-    # CREATE PAYLOAD
-    # =========================
     create_payload = build_create_payload(
         location_id=GHL_LOCATION_ID,
         pipeline_id=PIPELINE_ID,
@@ -45,9 +43,6 @@ async def opportunity_webhook(request: Request):
         custom_field_ns_id=CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID
     )
 
-    # =========================
-    # UPSERT
-    # =========================
     return upsert_opportunity(
         contact_id=contact_id,
         netsuite_opportunity_id=ns_id,

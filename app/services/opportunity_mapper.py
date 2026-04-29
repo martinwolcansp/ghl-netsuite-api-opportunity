@@ -1,4 +1,5 @@
-#services/opportunity_mapper.py
+# app/services/opportunity_mapper.py
+
 def map_unidad_comercial(valor):
     mapping = {
         "1": "Hogar Seguro",
