@@ -1,5 +1,3 @@
-# app/services/ghl_opportunity_service.py
-
 import logging
 import requests
 
@@ -16,7 +14,7 @@ GHL_BASE_URL = "https://services.leadconnectorhq.com"
 
 
 # ===============================
-# SEARCH (IGUAL PRESUPUESTO)
+# SEARCH OPPORTUNITY (ESTILO PRESUPUESTO)
 # ===============================
 def find_opportunity(contact_id, opportunity_id):
 
@@ -48,7 +46,8 @@ def find_opportunity(contact_id, opportunity_id):
     for opp in opportunities:
 
         logger.info("--------------------------------------")
-        logger.info(f"Checking Opp ID: {opp.get('id')}")
+        logger.info(f"Checking Opportunity ID: {opp.get('id')}")
+        logger.info(f"Name: {opp.get('name')}")
 
         for cf in opp.get("customFields", []):
 
@@ -64,7 +63,7 @@ def find_opportunity(contact_id, opportunity_id):
                 cf.get("id") == CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID
                 and str(value) == str(opportunity_id)
             ):
-                logger.info("🎯 MATCH FOUND")
+                logger.info("🎯 MATCH FOUND BY NS ID")
                 return opp
 
     logger.warning("❌ No matching opportunity found")
@@ -72,13 +71,35 @@ def find_opportunity(contact_id, opportunity_id):
 
 
 # ===============================
-# UPSERT (MISMA LÓGICA PRESUPUESTO)
+# SYNC OPPORTUNITY (CREATE ONLY)
 # ===============================
-def sync_opportunity(contact_id, opportunity_id, create_payload, update_payload_builder):
+def sync_opportunity(
+    contact_id,
+    opportunity_id=None,
+    netsuite_opportunity_id=None,
+    create_payload=None,
+    update_payload_builder=None
+):
+
+    # ===============================
+    # COMPATIBILIDAD DE NOMBRE
+    # ===============================
+    if opportunity_id is None:
+        opportunity_id = netsuite_opportunity_id
 
     logger.info("========== OPPORTUNITY SYNC NS → GHL ==========")
     logger.info(f"NS Opportunity ID: {opportunity_id}")
 
+    # ===============================
+    # VALIDACIÓN
+    # ===============================
+    if not contact_id:
+        logger.error("❌ Missing contact_id → aborting")
+        return {"error": "missing_contact_id"}
+
+    # ===============================
+    # SEARCH
+    # ===============================
     matching = find_opportunity(contact_id, opportunity_id)
 
     # ===============================
@@ -86,42 +107,75 @@ def sync_opportunity(contact_id, opportunity_id, create_payload, update_payload_
     # ===============================
     if not matching:
 
-        logger.warning("⚠️ Not found → CREATE")
+        logger.warning("⚠️ Opportunity not found → creating")
 
         resp = create_opportunity(create_payload)
 
-        logger.info("========== CREATE RESPONSE ==========")
-        logger.info(resp.text)
+        logger.info("========== GHL CREATE REQUEST ==========")
+        logger.info(f"Payload: {create_payload}")
 
-        return {"action": "created"}
+        logger.info("========== GHL CREATE RESPONSE ==========")
+        logger.info(f"STATUS: {resp.status_code}")
+        logger.info(f"BODY: {resp.text}")
+
+        return {
+            "action": "created",
+            "status": resp.status_code
+        }
 
     # ===============================
-    # UPDATE
+    # EXISTS → DO NOTHING
     # ===============================
     ghl_id = matching["id"]
 
     logger.info("========== EXISTING OPPORTUNITY ==========")
     logger.info(f"GHL ID: {ghl_id}")
 
-    payload = update_payload_builder(matching)
+    logger.info("⏭ Opportunity already exists → no action taken")
 
-    current_stage = matching.get("pipelineStageId")
-    current_status = matching.get("status")
+    return {
+        "action": "already_exists",
+        "id": ghl_id
+    }
 
-    if (
-        current_stage == payload.get("pipelineStageId")
-        and current_status == payload.get("status")
-    ):
-        logger.info("⏭ No changes (idempotent)")
-        return {"status": "already_updated"}
 
-    logger.info("========== FINAL UPDATE ==========")
-    logger.info(f"Stage: {current_stage} → {payload.get('pipelineStageId')}")
-    logger.info(f"Status: {current_status} → {payload.get('status')}")
+# ===============================
+# UPDATE (DESHABILITADO - FUTURO)
+# ===============================
+# def update_flow(matching, update_payload_builder):
+#
+#     ghl_id = matching["id"]
+#
+#     logger.info("========== EXISTING OPPORTUNITY ==========")
+#     logger.info(f"GHL ID: {ghl_id}")
+#
+#     payload = update_payload_builder(matching)
+#
+#     current_stage = matching.get("pipelineStageId")
+#     current_status = matching.get("status")
+#
+#     if (
+#         current_stage == payload.get("pipelineStageId")
+#         and current_status == payload.get("status")
+#     ):
+#         logger.info("⏭ No changes (idempotent)")
+#         return {"status": "already_updated"}
+#
+#     logger.info("========== FINAL UPDATE ==========")
+#     logger.info(f"Stage: {current_stage} → {payload.get('pipelineStageId')}")
+#     logger.info(f"Status: {current_status} → {payload.get('status')}")
+#
+#     resp = update_opportunity(
+#         opportunity_id=ghl_id,
+#         payload=payload
+#     )
+#
+#     logger.info("========== GHL UPDATE RESPONSE ==========")
+#     logger.info(f"STATUS: {resp.status_code}")
+#     logger.info(f"BODY: {resp.text}")
+#
+#     return {"action": "updated"}
 
-    resp = update_opportunity(
-        opportunity_id=ghl_id,
-        payload=payload
-    )
 
-    return {"action": "updated"}
+# backward compatibility
+upsert_opportunity = sync_opportunity
