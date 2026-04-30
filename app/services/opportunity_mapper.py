@@ -9,6 +9,18 @@ def map_unidad_comercial(valor):
     return mapping.get(str(valor), "Otro")
 
 
+# ===============================
+# BUILD NAME (UNIFICADO)
+# ===============================
+def build_opportunity_name(customer_name, titulo):
+    name = customer_name or ""
+
+    if titulo:
+        name = f"{name} - {titulo}"
+
+    return name
+
+
 def build_create_payload(
     location_id,
     pipeline_id,
@@ -20,12 +32,14 @@ def build_create_payload(
     unidad_comercial,
     custom_field_ns_id
 ):
+    name = build_opportunity_name(customer_name, titulo_oportunidad)
+
     return {
         "locationId": location_id,
         "pipelineId": pipeline_id,
         "pipelineStageId": pipeline_stage_id,
         "contactId": contact_id,
-        "name": customer_name,
+        "name": name,
         "status": "open",
         "customFields": [
             {
@@ -51,8 +65,10 @@ def build_update_payload(
     titulo_oportunidad,
     unidad_comercial
 ):
+    name = build_opportunity_name(customer_name, titulo_oportunidad)
+
     return {
-        "name": customer_name,
+        "name": name,
         "pipelineStageId": pipeline_stage_id,
         "customFields": [
             {
