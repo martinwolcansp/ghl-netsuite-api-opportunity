@@ -4,6 +4,7 @@ import logging
 import sys
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 # ===============================
 # LOGGING CONFIG (IMPORTANTE EN RENDER)
@@ -27,6 +28,23 @@ app = FastAPI()
 
 
 # ===============================
+# CORS (prueba piloto: la web interna llama a /admin/sync-oportunidad
+# desde el navegador). ALLOWED_ORIGINS se configura por variable de
+# entorno; si queda vacía, se permite cualquier origen (ver
+# app/core/config.py) -- restringir apenas la web interna tenga un
+# dominio de producción fijo.
+# ===============================
+from app.core.config import ALLOWED_ORIGINS
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS or ["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ===============================
 # HEALTH CHECK (RENDER FRIENDLY)
 # ===============================
 @app.get("/health")
@@ -41,7 +59,10 @@ try:
     from app.webhooks.opportunity_webhook import router as opportunity_router
     app.include_router(opportunity_router)
 
-    logger.info("✅ Opportunity router loaded successfully")
+    from app.routes.sync_oportunidad import router as sync_oportunidad_router
+    app.include_router(sync_oportunidad_router)
+
+    logger.info("✅ Routers loaded successfully (opportunity webhook + sync-oportunidad)")
 
 except Exception as e:
     logger.error("❌ ERROR LOADING ROUTERS")
