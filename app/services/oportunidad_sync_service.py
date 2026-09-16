@@ -16,6 +16,7 @@
 # crear.
 
 import logging
+import requests
 from datetime import datetime, timezone
 
 from app.clients.supabase_client import (
@@ -42,7 +43,16 @@ def _now_iso():
 
 
 def sync_oportunidad_a_ghl(oportunidad_id, user_token):
-    row, _resp = get_oportunidad_con_contacto(oportunidad_id, user_token)
+    try:
+        row, _resp = get_oportunidad_con_contacto(oportunidad_id, user_token)
+    except requests.exceptions.RequestException as e:
+        # Supabase inalcanzable (caída, timeout, DNS, etc.). No hay forma de
+        # persistir el estado "error" acá porque justamente no se puede
+        # escribir en Supabase — se devuelve el error tal cual para que el
+        # sitio lo muestre, sin romper con un 500 genérico.
+        mensaje = f"No se pudo conectar con la base de datos: {e}"
+        logger.error(mensaje)
+        return {"ok": False, "status": 503, "detail": mensaje}
 
     if row is None:
         return {
@@ -93,7 +103,22 @@ def sync_oportunidad_a_ghl(oportunidad_id, user_token):
         custom_field_ns_id=CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID,
     )
 
-    ghl_resp = create_opportunity(payload)
+    try:
+        ghl_resp = create_opportunity(payload)
+    except requests.exceptions.RequestException as e:
+        # GHL inalcanzable, timeout, DNS caído, etc. — antes esto se iba sin
+        # capturar y la oportunidad quedaba en "Pendiente" para siempre en
+        # vez de "Error". Ahora sí queda registrado y con reintento posible.
+        mensaje = f"No se pudo conectar con GHL: {e}"
+        try:
+            actualizar_sync_oportunidad(oportunidad_id, user_token, {
+                "sync_estado": "error",
+                "sync_mensaje": mensaje,
+                "sync_actualizado_en": _now_iso(),
+            })
+        except requests.exceptions.RequestException:
+            logger.error("Además de fallar GHL, no se pudo actualizar sync_estado en Supabase")
+        return {"ok": False, "status": 503, "detail": mensaje}
 
     if ghl_resp.status_code not in (200, 201):
         mensaje = f"GHL respondió {ghl_resp.status_code}: {ghl_resp.text[:300]}"

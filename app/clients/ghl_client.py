@@ -30,7 +30,8 @@ def create_opportunity(payload):
     resp = requests.post(
         f"{GHL_BASE_URL}/opportunities/",
         headers=_headers(),
-        json=payload
+        json=payload,
+        timeout=15,
     )
 
     logger.info("========== GHL CREATE RESPONSE ==========")
@@ -57,7 +58,8 @@ def update_opportunity(opportunity_id, payload):
     resp = requests.put(
         f"{GHL_BASE_URL}/opportunities/{opportunity_id}",
         headers=_headers(),
-        json=payload
+        json=payload,
+        timeout=15,
     )
 
     logger.info("========== GHL UPDATE RESPONSE ==========")
