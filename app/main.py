@@ -35,10 +35,12 @@ app = FastAPI()
 # dominio de producción fijo.
 # ===============================
 from app.core.config import ALLOWED_ORIGINS, MODO_SIMULACION, WEBHOOK_SECRET
+from app import registro_eventos
 
 logger.info(
     f"Arranque: MODO_SIMULACION={MODO_SIMULACION} (sólo /webhook/opportunity) | "
-    f"WEBHOOK_SECRET={'configurado' if WEBHOOK_SECRET else 'vacío (no se exige)'}"
+    f"WEBHOOK_SECRET={'configurado' if WEBHOOK_SECRET else 'vacío (no se exige)'} | "
+    f"REGISTRO_EVENTOS={registro_eventos.descripcion()}"
 )
 
 app.add_middleware(
