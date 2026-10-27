@@ -34,7 +34,12 @@ app = FastAPI()
 # app/core/config.py) -- restringir apenas la web interna tenga un
 # dominio de producción fijo.
 # ===============================
-from app.core.config import ALLOWED_ORIGINS
+from app.core.config import ALLOWED_ORIGINS, MODO_SIMULACION, WEBHOOK_SECRET
+
+logger.info(
+    f"Arranque: MODO_SIMULACION={MODO_SIMULACION} (sólo /webhook/opportunity) | "
+    f"WEBHOOK_SECRET={'configurado' if WEBHOOK_SECRET else 'vacío (no se exige)'}"
+)
 
 app.add_middleware(
     CORSMiddleware,

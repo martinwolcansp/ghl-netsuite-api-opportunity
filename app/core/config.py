@@ -37,3 +37,24 @@ SUPABASE_ANON_KEY = os.getenv("SUPABASE_ANON_KEY")
 # todavía no tiene un dominio de producción fijo) — restringir apenas se
 # tenga el dominio definitivo.
 ALLOWED_ORIGINS = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
+
+# =========================
+# MIGRACIÓN AL SERVIDOR LOCAL (Parte II)
+# =========================
+# Interruptores para la réplica de la Etapa 2. Apagados por defecto: sin
+# estas variables el webhook se comporta igual que en Render.
+# Afectan SÓLO a /webhook/opportunity (el que llama NetSuite). El endpoint
+# del sitio interno (/admin/sync-oportunidad) no los usa y sigue creando
+# oportunidades reales en GHL.
+
+# MODO_SIMULACION=true -> el webhook hace la búsqueda real en GHL pero no
+# crea la oportunidad: registra en el log, con el prefijo [SIMULACION], el
+# alta exacta que habría hecho.
+MODO_SIMULACION = os.getenv("MODO_SIMULACION", "false").strip().lower() in (
+    "true", "1", "si", "sí", "yes"
+)
+
+# WEBHOOK_SECRET con valor -> /webhook/opportunity exige el header
+# X-Integration-Secret (o el parámetro ?token=) y rechaza con 401 lo que no
+# lo traiga. Vacío -> no exige nada.
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()

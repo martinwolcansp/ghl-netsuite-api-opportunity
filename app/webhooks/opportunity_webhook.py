@@ -1,3 +1,6 @@
+import hmac
+import logging
+
 from fastapi import APIRouter, Request, HTTPException
 
 from app.services.ghl_opportunity_service import sync_opportunity
@@ -11,14 +14,32 @@ from app.core.config import (
     GHL_LOCATION_ID,
     PIPELINE_ID,
     PIPELINE_STAGE_ID,
-    CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID
+    CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID,
+    WEBHOOK_SECRET
 )
 
 router = APIRouter()
 
+logger = logging.getLogger("opportunity_webhook")
+
 
 @router.post("/webhook/opportunity")
 async def opportunity_webhook(request: Request):
+
+    # ===============================
+    # SECRETO COMPARTIDO (servidor local)
+    # ===============================
+    # Sólo se exige si WEBHOOK_SECRET tiene valor. Acepta el header
+    # X-Integration-Secret o el parámetro ?token=.
+    if WEBHOOK_SECRET:
+        recibido = (
+            request.headers.get("X-Integration-Secret")
+            or request.query_params.get("token")
+            or ""
+        )
+        if not hmac.compare_digest(recibido, WEBHOOK_SECRET):
+            logger.warning("Webhook rechazado: secreto ausente o inválido")
+            raise HTTPException(status_code=401, detail="unauthorized")
 
     payload = await request.json()
 

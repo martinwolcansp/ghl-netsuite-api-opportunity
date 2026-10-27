@@ -5,7 +5,8 @@ from app.clients.ghl_client import update_opportunity, create_opportunity
 from app.core.config import (
     GHL_API_KEY,
     GHL_LOCATION_ID,
-    CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID
+    CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID,
+    MODO_SIMULACION
 )
 
 logger = logging.getLogger("ghl_service")
@@ -108,6 +109,21 @@ def sync_opportunity(
     if not matching:
 
         logger.warning("⚠️ Opportunity not found → creating")
+
+        # ===============================
+        # MODO SIMULACIÓN (servidor local)
+        # ===============================
+        # No crea en GHL: registra el alta exacta que habría hecho. Sólo
+        # aplica a este flujo (webhook de NetSuite), no al sitio interno.
+        if MODO_SIMULACION:
+            logger.info(f"[SIMULACION] POST {GHL_BASE_URL}/opportunities/")
+            logger.info(f"[SIMULACION] Payload: {create_payload}")
+            return {
+                "action": "created",
+                "status": 201,
+                "simulado": True,
+                "payload": create_payload
+            }
 
         resp = create_opportunity(create_payload)
 
