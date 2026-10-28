@@ -1,10 +1,14 @@
 # app/services/opportunity_mapper.py
 
 def map_unidad_comercial(valor):
+    # Campo "Unidad comercial" de la oportunidad en NetSuite
+    # (custbodycustbody_mw_sp_unidad_comercia). Hoy sólo se carga en
+    # alarmas nuevas. No confundir con la unidad de negocio (class).
     mapping = {
         "1": "Hogar Seguro",
         "2": "Comercio Seguro",
-        "3": "Obra Segura"
+        "3": "Obra Segura",
+        "8": "Gubernamental"
     }
     return mapping.get(str(valor), "Otro")
 
