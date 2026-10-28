@@ -82,12 +82,12 @@ def sync_oportunidad_a_ghl(oportunidad_id, user_token):
         parte for parte in [contacto.get("nombre"), contacto.get("apellido")] if parte
     ).strip()
 
-    # unidad_comercial en la tabla es texto libre ("Hogar Seguro", etc.) y se
+    # unidad_comercial en la tabla es texto libre ("Hogar", etc.) y se
     # envía tal cual. class_ns es la unidad de negocio (class) de NetSuite,
     # que es otra cosa: no se pasa por map_unidad_comercial, porque ese mapeo
     # es del campo "Unidad comercial" (1 Hogar, 2 Comercio, 3 Obra,
     # 8 Gubernamental) y con la class daría valores erróneos
-    # (p. ej. class 3 "Nuevas" -> "Obra Segura").
+    # (p. ej. class 3 "Nuevas" -> "Obra").
     unidad = row.get("unidad_comercial") or ""
 
     payload = build_create_payload(

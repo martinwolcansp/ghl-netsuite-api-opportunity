@@ -20,6 +20,53 @@ def _headers():
 
 
 # ===============================
+# CAMPOS PERSONALIZADOS DE OPORTUNIDAD (clave -> ID)
+# ===============================
+# GHL identifica los campos personalizados por su ID interno. Se leen una
+# vez de la cuenta y se guardan en memoria; si la lectura falla no se guarda
+# nada y se reintenta en el próximo envío.
+_cache_campos = {}
+
+
+def get_opportunity_custom_fields():
+    from app.core.config import GHL_LOCATION_ID
+
+    if _cache_campos:
+        return _cache_campos
+
+    try:
+        resp = requests.get(
+            f"{GHL_BASE_URL}/locations/{GHL_LOCATION_ID}/customFields",
+            headers=_headers(),
+            params={"model": "opportunity"},
+            timeout=15,
+        )
+    except requests.exceptions.RequestException as e:
+        logger.error(f"No se pudieron leer los campos personalizados de GHL: {e}")
+        return {}
+
+    if resp.status_code != 200:
+        logger.error(
+            f"No se pudieron leer los campos personalizados de GHL: "
+            f"HTTP {resp.status_code} - {resp.text[:500]}"
+        )
+        return {}
+
+    for cf in resp.json().get("customFields", []):
+        clave = (cf.get("fieldKey") or "").replace("opportunity.", "", 1)
+        if clave:
+            _cache_campos[clave] = {
+                "id": cf.get("id"),
+                "nombre": cf.get("name"),
+                "tipo": cf.get("dataType"),
+                "opciones": cf.get("picklistOptions") or [],
+            }
+
+    logger.info(f"Campos personalizados de oportunidad en GHL: {_cache_campos}")
+    return _cache_campos
+
+
+# ===============================
 # CREATE OPPORTUNITY
 # ===============================
 def create_opportunity(payload):

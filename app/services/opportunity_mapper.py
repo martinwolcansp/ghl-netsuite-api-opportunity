@@ -1,13 +1,42 @@
 # app/services/opportunity_mapper.py
 
+import logging
+
+from app.clients.ghl_client import get_opportunity_custom_fields
+
+logger = logging.getLogger("opportunity_mapper")
+
+
+def _campo(clave, valor):
+    """Arma un campo personalizado para GHL. Usa el ID interno del campo
+    (buscado por su clave en la cuenta); si no se encuentra, envía la clave
+    como último recurso y lo deja en el log."""
+    campos = get_opportunity_custom_fields()
+    info = campos.get(clave)
+
+    if not info or not info.get("id"):
+        logger.warning(
+            f"Campo personalizado '{clave}' no encontrado en GHL: se envía por clave"
+        )
+        return {"key": clave, "field_value": valor}
+
+    opciones = info.get("opciones") or []
+    if opciones and valor not in opciones:
+        logger.warning(
+            f"El valor '{valor}' no es una opción del campo '{clave}' "
+            f"({info.get('tipo')}). Opciones: {opciones}"
+        )
+
+    return {"id": info["id"], "field_value": valor}
+
 def map_unidad_comercial(valor):
     # Campo "Unidad comercial" de la oportunidad en NetSuite
-    # (custbodycustbody_mw_sp_unidad_comercia). Hoy sólo se carga en
+    # (custbody_mw_sp_unidad_comercial). Hoy sólo se carga en
     # alarmas nuevas. No confundir con la unidad de negocio (class).
     mapping = {
-        "1": "Hogar Seguro",
-        "2": "Comercio Seguro",
-        "3": "Obra Segura",
+        "1": "Hogar",
+        "2": "Comercio",
+        "3": "Obra",
         "8": "Gubernamental"
     }
     return mapping.get(str(valor), "Otro")
@@ -45,24 +74,17 @@ def build_create_payload(
         "contactId": contact_id,
         "name": name,
         "status": "open",
-        # Los campos personalizados se identifican por "id" (ID interno de
-        # GHL, como el de NetSuite que viene de la variable de entorno) o por
-        # "key" (la clave del campo). "titulo_oportunidad" y
-        # "unidad_comercial_ns" son claves, no IDs: antes iban en "id" y GHL
-        # los ignoraba sin dar error.
+        # Los campos personalizados se envían por su ID interno de GHL.
+        # "titulo_oportunidad" y "unidad_comercial_ns" son claves: _campo()
+        # busca el ID correspondiente en la cuenta. Antes la clave iba en
+        # "id" y GHL los ignoraba sin dar error.
         "customFields": [
             {
                 "id": custom_field_ns_id,
                 "field_value": str(netsuite_opportunity_id)
             },
-            {
-                "key": "titulo_oportunidad",
-                "field_value": titulo_oportunidad
-            },
-            {
-                "key": "unidad_comercial_ns",
-                "field_value": unidad_comercial
-            }
+            _campo("titulo_oportunidad", titulo_oportunidad),
+            _campo("unidad_comercial_ns", unidad_comercial)
         ]
     }
 
@@ -81,13 +103,7 @@ def build_update_payload(
     return {
         "name": name,
         "customFields": [
-            {
-                "key": "titulo_oportunidad",
-                "field_value": titulo_oportunidad
-            },
-            {
-                "key": "unidad_comercial_ns",
-                "field_value": unidad_comercial
-            }
+            _campo("titulo_oportunidad", titulo_oportunidad),
+            _campo("unidad_comercial_ns", unidad_comercial)
         ]
     }

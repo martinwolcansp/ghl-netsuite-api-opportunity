@@ -174,11 +174,15 @@ def sync_opportunity(
         payload=payload
     )
 
-    return {
+    resultado = {
         "action": "updated",
         "status": resp.status_code,
-        "id": ghl_id
+        "id": ghl_id,
+        "custom_fields_enviados": payload.get("customFields"),
     }
+    if resp.status_code not in (200, 201):
+        resultado["ghl_error"] = resp.text[:1000]
+    return resultado
 
 
 # ===============================
