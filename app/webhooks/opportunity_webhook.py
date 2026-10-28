@@ -40,6 +40,10 @@ def _resultado_de(result):
         # Hallazgo 2: el servicio responde 200 aunque GHL rechace el alta.
         # La respuesta no se toca, pero el registro muestra el error real.
         return "error", f"GHL rechazó el alta (HTTP {result.get('status')})"
+    if result.get("action") == "updated":
+        if result.get("status") in (200, 201):
+            return "updated", None
+        return "error", f"GHL rechazó la actualización (HTTP {result.get('status')})"
     return "error", "Respuesta no reconocida"
 
 
@@ -114,7 +118,6 @@ async def opportunity_webhook(request: Request):
             update_payload_builder=lambda existing: build_update_payload(
                 existing,
                 payload.get("netsuite_customer_name"),
-                PIPELINE_STAGE_ID,
                 payload.get("titulo_oportunidad"),
                 unidad
             )

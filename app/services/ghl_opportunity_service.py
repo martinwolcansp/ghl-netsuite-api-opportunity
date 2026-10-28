@@ -72,7 +72,7 @@ def find_opportunity(contact_id, opportunity_id):
 
 
 # ===============================
-# SYNC OPPORTUNITY (CREATE ONLY)
+# SYNC OPPORTUNITY (CREATE + UPDATE)
 # ===============================
 def sync_opportunity(
     contact_id,
@@ -140,17 +140,43 @@ def sync_opportunity(
         }
 
     # ===============================
-    # EXISTS → DO NOTHING
+    # EXISTS → UPDATE (nombre, título y unidad comercial)
     # ===============================
+    # Pasa al reenviar desde el botón "Enviar a GHL" de NetSuite. No cambia
+    # etapa ni estado (ver build_update_payload).
     ghl_id = matching["id"]
 
     logger.info("========== EXISTING OPPORTUNITY ==========")
     logger.info(f"GHL ID: {ghl_id}")
 
-    logger.info("⏭ Opportunity already exists → no action taken")
+    if not update_payload_builder:
+        logger.info("⏭ Opportunity already exists → no update builder, no action taken")
+        return {
+            "action": "already_exists",
+            "id": ghl_id
+        }
+
+    payload = update_payload_builder(matching)
+
+    if MODO_SIMULACION:
+        logger.info(f"[SIMULACION] PUT {GHL_BASE_URL}/opportunities/{ghl_id}")
+        logger.info(f"[SIMULACION] Payload: {payload}")
+        return {
+            "action": "updated",
+            "status": 200,
+            "simulado": True,
+            "id": ghl_id,
+            "payload": payload
+        }
+
+    resp = update_opportunity(
+        opportunity_id=ghl_id,
+        payload=payload
+    )
 
     return {
-        "action": "already_exists",
+        "action": "updated",
+        "status": resp.status_code,
         "id": ghl_id
     }
 

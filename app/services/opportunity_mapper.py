@@ -45,17 +45,22 @@ def build_create_payload(
         "contactId": contact_id,
         "name": name,
         "status": "open",
+        # Los campos personalizados se identifican por "id" (ID interno de
+        # GHL, como el de NetSuite que viene de la variable de entorno) o por
+        # "key" (la clave del campo). "titulo_oportunidad" y
+        # "unidad_comercial_ns" son claves, no IDs: antes iban en "id" y GHL
+        # los ignoraba sin dar error.
         "customFields": [
             {
                 "id": custom_field_ns_id,
                 "field_value": str(netsuite_opportunity_id)
             },
             {
-                "id": "titulo_oportunidad",
+                "key": "titulo_oportunidad",
                 "field_value": titulo_oportunidad
             },
             {
-                "id": "unidad_comercial_ns",
+                "key": "unidad_comercial_ns",
                 "field_value": unidad_comercial
             }
         ]
@@ -65,22 +70,23 @@ def build_create_payload(
 def build_update_payload(
     existing,
     customer_name,
-    pipeline_stage_id,
     titulo_oportunidad,
     unidad_comercial
 ):
+    # Actualiza sólo nombre y datos informativos. NO toca la etapa ni el
+    # estado: los maneja la integración de presupuestos, y reenviar la
+    # oportunidad no debe devolverla a la etapa inicial.
     name = build_opportunity_name(customer_name, titulo_oportunidad)
 
     return {
         "name": name,
-        "pipelineStageId": pipeline_stage_id,
         "customFields": [
             {
-                "id": "titulo_oportunidad",
+                "key": "titulo_oportunidad",
                 "field_value": titulo_oportunidad
             },
             {
-                "id": "unidad_comercial_ns",
+                "key": "unidad_comercial_ns",
                 "field_value": unidad_comercial
             }
         ]
