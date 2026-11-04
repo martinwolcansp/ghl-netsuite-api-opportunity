@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Configuración local (nunca al repositorio)
+.env
+
+# Volcados de código para revisión
+proyecto_completo.txt
+proyecto_completo_txt.py
+
+# Carpetas auxiliares
+_to_delete/
