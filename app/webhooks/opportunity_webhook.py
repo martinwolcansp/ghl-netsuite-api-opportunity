@@ -1,5 +1,6 @@
 import hmac
 import logging
+import re
 import time
 
 from fastapi import APIRouter, Request, HTTPException
@@ -89,7 +90,15 @@ async def opportunity_webhook(request: Request):
     try:
         payload = await request.json()
 
-        contact_id = payload.get("ghl_contact_id")
+        # Los IDs de GHL son alfanuméricos: se descarta cualquier otro carácter
+        # que venga del campo de NetSuite (ej. "ZQUyvPUBE2m109VEeEgW?").
+        contact_id_original = payload.get("ghl_contact_id")
+        contact_id = re.sub(r"[^A-Za-z0-9]", "", str(contact_id_original or ""))
+        if contact_id and contact_id != contact_id_original:
+            logger.warning(
+                f"ghl_contact_id con caracteres inválidos: "
+                f"{contact_id_original!r} → {contact_id!r}"
+            )
         ns_id = payload.get("netsuite_opportunity_id")
 
         if not contact_id or not ns_id:

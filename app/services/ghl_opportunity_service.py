@@ -134,10 +134,13 @@ def sync_opportunity(
         logger.info(f"STATUS: {resp.status_code}")
         logger.info(f"BODY: {resp.text}")
 
-        return {
+        resultado = {
             "action": "created",
             "status": resp.status_code
         }
+        if resp.status_code not in (200, 201):
+            resultado["ghl_error"] = resp.text[:1000]
+        return resultado
 
     # ===============================
     # EXISTS → UPDATE (nombre, título y unidad comercial)
