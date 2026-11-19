@@ -72,6 +72,38 @@ def find_opportunity(contact_id, opportunity_id):
 
 
 # ===============================
+# PROPIETARIO RECHAZADO → REINTENTO SIN PROPIETARIO
+# ===============================
+# Si GHL rechaza el envío (4xx) y llevaba propietario (ID de usuario
+# inexistente o mal cargado en NetSuite), se reintenta sin él para que la
+# oportunidad se guarde igual. Devuelve (respuesta, info del propietario).
+def _enviar_con_propietario(enviar, payload, representante):
+    assigned_to = payload.get("assignedTo")
+
+    if not assigned_to:
+        return enviar(payload), {"estado": "sin_dato", "representante": representante}
+
+    resp = enviar(payload)
+
+    if 400 <= resp.status_code < 500:
+        logger.warning(
+            f"GHL rechazó el envío con propietario {assigned_to} ({representante}): "
+            f"se reintenta sin propietario"
+        )
+        detalle = resp.text[:300]
+        sin_propietario = {k: v for k, v in payload.items() if k != "assignedTo"}
+        resp = enviar(sin_propietario)
+        return resp, {
+            "estado": "rechazado",
+            "ghl_user_id": assigned_to,
+            "representante": representante,
+            "detalle": detalle
+        }
+
+    return resp, {"estado": "asignado", "ghl_user_id": assigned_to, "representante": representante}
+
+
+# ===============================
 # SYNC OPPORTUNITY (CREATE + UPDATE)
 # ===============================
 def sync_opportunity(
@@ -79,7 +111,8 @@ def sync_opportunity(
     opportunity_id=None,
     netsuite_opportunity_id=None,
     create_payload=None,
-    update_payload_builder=None
+    update_payload_builder=None,
+    representante=None
 ):
 
     # ===============================
@@ -125,18 +158,14 @@ def sync_opportunity(
                 "payload": create_payload
             }
 
-        resp = create_opportunity(create_payload)
-
-        logger.info("========== GHL CREATE REQUEST ==========")
-        logger.info(f"Payload: {create_payload}")
-
-        logger.info("========== GHL CREATE RESPONSE ==========")
-        logger.info(f"STATUS: {resp.status_code}")
-        logger.info(f"BODY: {resp.text}")
+        resp, propietario = _enviar_con_propietario(
+            create_opportunity, create_payload, representante
+        )
 
         resultado = {
             "action": "created",
-            "status": resp.status_code
+            "status": resp.status_code,
+            "propietario": propietario
         }
         if resp.status_code not in (200, 201):
             resultado["ghl_error"] = resp.text[:1000]
@@ -172,9 +201,10 @@ def sync_opportunity(
             "payload": payload
         }
 
-    resp = update_opportunity(
-        opportunity_id=ghl_id,
-        payload=payload
+    resp, propietario = _enviar_con_propietario(
+        lambda p: update_opportunity(opportunity_id=ghl_id, payload=p),
+        payload,
+        representante
     )
 
     resultado = {
@@ -182,6 +212,7 @@ def sync_opportunity(
         "status": resp.status_code,
         "id": ghl_id,
         "custom_fields_enviados": payload.get("customFields"),
+        "propietario": propietario
     }
     if resp.status_code not in (200, 201):
         resultado["ghl_error"] = resp.text[:1000]

@@ -119,7 +119,8 @@ async def opportunity_webhook(request: Request):
             unidad_comercial=unidad,
             custom_field_ns_id=CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID,
             numero_oportunidad=payload.get("numero_oportunidad"),
-            fecha_oportunidad=payload.get("fecha_oportunidad")
+            fecha_oportunidad=payload.get("fecha_oportunidad"),
+            ghl_user_id=payload.get("ghl_user_id")
         )
 
         result = sync_opportunity(
@@ -132,8 +133,10 @@ async def opportunity_webhook(request: Request):
                 payload.get("titulo_oportunidad"),
                 unidad,
                 payload.get("numero_oportunidad"),
-                payload.get("fecha_oportunidad")
-            )
+                payload.get("fecha_oportunidad"),
+                payload.get("ghl_user_id")
+            ),
+            representante=payload.get("representante")
         )
 
     except HTTPException:
@@ -143,6 +146,16 @@ async def opportunity_webhook(request: Request):
         raise
 
     resultado, detalle = _resultado_de(result)
+
+    # Aviso si GHL rechazó el propietario (la oportunidad se guardó sin él).
+    propietario = result.get("propietario") or {}
+    if propietario.get("estado") == "rechazado":
+        aviso = (
+            f"Propietario rechazado por GHL ({propietario.get('representante')} "
+            f"- {propietario.get('ghl_user_id')})"
+        )
+        detalle = f"{detalle} · {aviso}" if detalle else aviso
+
     registrar(resultado, result, detalle)
 
     return result

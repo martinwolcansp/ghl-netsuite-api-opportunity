@@ -1,6 +1,7 @@
 # app/services/opportunity_mapper.py
 
 import logging
+import re
 from datetime import datetime
 
 from app.clients.ghl_client import get_opportunity_custom_fields
@@ -72,6 +73,11 @@ def _campos_documento(numero_oportunidad, fecha_oportunidad):
     return campos
 
 
+def limpiar_ghl_user_id(valor):
+    """Los IDs de GHL son alfanuméricos. Devuelve None si queda vacío."""
+    return re.sub(r"[^A-Za-z0-9]", "", str(valor or "")) or None
+
+
 def map_unidad_comercial(valor):
     # Campo "Unidad comercial" de la oportunidad en NetSuite
     # (custbody_mw_sp_unidad_comercial). Hoy sólo se carga en
@@ -108,11 +114,12 @@ def build_create_payload(
     unidad_comercial,
     custom_field_ns_id,
     numero_oportunidad=None,
-    fecha_oportunidad=None
+    fecha_oportunidad=None,
+    ghl_user_id=None
 ):
     name = build_opportunity_name(customer_name, titulo_oportunidad)
 
-    return {
+    payload = {
         "locationId": location_id,
         "pipelineId": pipeline_id,
         "pipelineStageId": pipeline_stage_id,
@@ -133,6 +140,13 @@ def build_create_payload(
         ] + _campos_documento(numero_oportunidad, fecha_oportunidad)
     }
 
+    # Propietario: el representante de ventas de NetSuite.
+    assigned_to = limpiar_ghl_user_id(ghl_user_id)
+    if assigned_to:
+        payload["assignedTo"] = assigned_to
+
+    return payload
+
 
 def build_update_payload(
     existing,
@@ -140,17 +154,26 @@ def build_update_payload(
     titulo_oportunidad,
     unidad_comercial,
     numero_oportunidad=None,
-    fecha_oportunidad=None
+    fecha_oportunidad=None,
+    ghl_user_id=None
 ):
-    # Actualiza sólo nombre y datos informativos. NO toca la etapa ni el
-    # estado: los maneja la integración de presupuestos, y reenviar la
-    # oportunidad no debe devolverla a la etapa inicial.
+    # Actualiza sólo nombre, datos informativos y propietario. NO toca la
+    # etapa ni el estado: los maneja la integración de presupuestos, y
+    # reenviar la oportunidad no debe devolverla a la etapa inicial.
     name = build_opportunity_name(customer_name, titulo_oportunidad)
 
-    return {
+    payload = {
         "name": name,
         "customFields": [
             _campo("titulo_oportunidad", titulo_oportunidad),
             _campo("unidad_comercial_ns", unidad_comercial)
         ] + _campos_documento(numero_oportunidad, fecha_oportunidad)
     }
+
+    # El propietario se pisa siempre con el representante de NetSuite. Sin
+    # ID de usuario GHL se deja el propietario actual.
+    assigned_to = limpiar_ghl_user_id(ghl_user_id)
+    if assigned_to:
+        payload["assignedTo"] = assigned_to
+
+    return payload
