@@ -1,6 +1,7 @@
 # app/services/opportunity_mapper.py
 
 import logging
+from datetime import datetime
 
 from app.clients.ghl_client import get_opportunity_custom_fields
 
@@ -28,6 +29,48 @@ def _campo(clave, valor):
         )
 
     return {"id": info["id"], "field_value": valor}
+
+# Formatos en que puede llegar la fecha desde NetSuite (getText de trandate
+# usa el formato de la cuenta: en SP es día/mes/año).
+_FORMATOS_FECHA_NS = ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d.%m.%Y")
+
+
+def _campo_fecha(clave, texto):
+    """Campo personalizado de fecha. Si el campo de GHL es de tipo fecha
+    se envía AAAA-MM-DD; si es de texto, DD/MM/AAAA. Si la fecha no se puede
+    interpretar se envía tal como llegó y queda en el log."""
+    texto = (texto or "").strip()
+    if not texto:
+        return None
+
+    fecha = None
+    for formato in _FORMATOS_FECHA_NS:
+        try:
+            fecha = datetime.strptime(texto, formato).date()
+            break
+        except ValueError:
+            continue
+
+    if not fecha:
+        logger.warning(f"Fecha '{texto}' no reconocida para '{clave}': se envía sin convertir")
+        return _campo(clave, texto)
+
+    tipo = (get_opportunity_custom_fields().get(clave) or {}).get("tipo")
+    valor = fecha.isoformat() if tipo == "DATE" else fecha.strftime("%d/%m/%Y")
+    return _campo(clave, valor)
+
+
+def _campos_documento(numero_oportunidad, fecha_oportunidad):
+    """Número y fecha de la oportunidad de NetSuite. Sólo se envían los que
+    tienen valor (el alta desde el sitio interno no los trae)."""
+    campos = []
+    if numero_oportunidad:
+        campos.append(_campo("netsuite_opportunity_opt", str(numero_oportunidad)))
+    fecha = _campo_fecha("netsuite_opportunity_date", fecha_oportunidad)
+    if fecha:
+        campos.append(fecha)
+    return campos
+
 
 def map_unidad_comercial(valor):
     # Campo "Unidad comercial" de la oportunidad en NetSuite
@@ -63,7 +106,9 @@ def build_create_payload(
     netsuite_opportunity_id,
     titulo_oportunidad,
     unidad_comercial,
-    custom_field_ns_id
+    custom_field_ns_id,
+    numero_oportunidad=None,
+    fecha_oportunidad=None
 ):
     name = build_opportunity_name(customer_name, titulo_oportunidad)
 
@@ -85,7 +130,7 @@ def build_create_payload(
             },
             _campo("titulo_oportunidad", titulo_oportunidad),
             _campo("unidad_comercial_ns", unidad_comercial)
-        ]
+        ] + _campos_documento(numero_oportunidad, fecha_oportunidad)
     }
 
 
@@ -93,7 +138,9 @@ def build_update_payload(
     existing,
     customer_name,
     titulo_oportunidad,
-    unidad_comercial
+    unidad_comercial,
+    numero_oportunidad=None,
+    fecha_oportunidad=None
 ):
     # Actualiza sólo nombre y datos informativos. NO toca la etapa ni el
     # estado: los maneja la integración de presupuestos, y reenviar la
@@ -105,5 +152,5 @@ def build_update_payload(
         "customFields": [
             _campo("titulo_oportunidad", titulo_oportunidad),
             _campo("unidad_comercial_ns", unidad_comercial)
-        ]
+        ] + _campos_documento(numero_oportunidad, fecha_oportunidad)
     }

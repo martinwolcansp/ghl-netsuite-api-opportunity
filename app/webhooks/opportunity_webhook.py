@@ -117,7 +117,9 @@ async def opportunity_webhook(request: Request):
             netsuite_opportunity_id=ns_id,
             titulo_oportunidad=payload.get("titulo_oportunidad"),
             unidad_comercial=unidad,
-            custom_field_ns_id=CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID
+            custom_field_ns_id=CUSTOM_FIELD_NETSUITE_OPPORTUNITY_ID,
+            numero_oportunidad=payload.get("numero_oportunidad"),
+            fecha_oportunidad=payload.get("fecha_oportunidad")
         )
 
         result = sync_opportunity(
@@ -128,7 +130,9 @@ async def opportunity_webhook(request: Request):
                 existing,
                 payload.get("netsuite_customer_name"),
                 payload.get("titulo_oportunidad"),
-                unidad
+                unidad,
+                payload.get("numero_oportunidad"),
+                payload.get("fecha_oportunidad")
             )
         )
 
